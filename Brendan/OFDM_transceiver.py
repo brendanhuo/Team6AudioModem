@@ -153,7 +153,7 @@ array2 = []
 def removeZeros(position,data):
     return data[position:]
 
-data = removeZeros(bestLocation, data)
+data = removeZeros(bestLocation, audio)
 
 for i in range(len(audio)//1056):
     data = audio[i*1056: 1056*(i+1)]
