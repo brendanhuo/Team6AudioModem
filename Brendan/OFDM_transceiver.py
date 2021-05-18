@@ -2,21 +2,27 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.interpolate
 import simpleaudio as sa
+import pyaudio
+import sounddevice as sd
+from scipy.io.wavfile import write
+import soundfile as sf
 
+####Configs######
 N = 1024 # DFT size
 K = 512 # number of OFDM subcarriers with information
 CP = K//8  # length of the cyclic prefix: 25% of the block
 P = K//8# number of pilot carriers per OFDM block
 pilotValue = 1+1j # The known value each pilot transmits
 
+#Define the payload and pilot carriers
 allCarriers = np.arange(K)  # indices of all subcarriers ([0, 1, ... K-1])
 
 pilotCarriers = allCarriers[1::K//P] # Pilots is every (K/P)th carrier.
 
-# data carriers are all remaining carriers
 dataCarriers = np.delete(allCarriers, pilotCarriers)
 dataCarriers = np.delete(dataCarriers, 0)
 
+#QPSK
 mu = 2 # bits per symbol 
 payloadBits_per_OFDM = len(dataCarriers)*mu  # number of bits per OFDM symbol
 
@@ -61,9 +67,8 @@ for section in bits_SP:
     sound_array.append(OFDM_withCP.real)
 
 sound_array = np.array(sound_array).ravel()
-import pyaudio
-import sounddevice as sd
-from scipy.io.wavfile import write
+
+###Some Audio Functions###
 
 def play(array, fs=44100):
 
@@ -92,37 +97,47 @@ def sound(array, fs=44100):
     stream.close()
     p.terminate()
 
+def audioDataFromFile(filename):
+    data, fs = sf.read(filename, dtype='float32')  
+    return data
+
 #playrec(sound_array)
 
-audio = sound_array * (2 ** 15 - 1) / np.max(np.abs(sound_array))
+#Save random sequence to wav
 audio = sound_array.astype(np.float32)
 print("writing")
 write('test_speaker_info.wav', 44100, audio)  # Save as WAV file 
 print("done")
-
+print(np.max(audio))
 #plt.plot(np.arange(len(audio)), audio)
 #plt.show()
 
+#Import back data that you just made wav file from
+audio = audioDataFromFile('test_speaker_info.wav')
+
+#append some zeros infront to simulate some simplistic synchronisation issue
 audio = np.append(np.zeros(6790), audio)
-corrArray = []
-maximum = 0
-count = 0
-corrlast = 0
-countLimit = CP//2
-for i in range(20000):
-    corr = np.correlate(audio[i:i+CP], audio[i+N:i+N+CP]/CP)
-    corrArray.append(corr)
-    if corr>corrlast:
-        count += 1
-        corrlast = corr
-    else:
-        if count > countLimit:
-            location = i-1
-            break
-        else:
+
+def CPsync(audio, limit = 10000, countLimit = CP//2, CP = CP):
+    corrArray = []
+    count = 0
+    corrlast = 0
+    countLimit = CP//2
+    for i in range(limit):
+        corr = np.correlate(audio[i:i+CP], audio[i+N:i+N+CP]/CP)
+        corrArray.append(corr)
+        if corr>corrlast:
+            count += 1
             corrlast = corr
-            count = 0
-     
+        else:
+            if count > countLimit:
+                location = i-1
+                break
+            else:
+                corrlast = corr
+                count = 0
+    return location
+location = CPsync(audio) 
 #plt.plot(np.arange(len(corrArray[6700:6900])), corrArray[6700:6900])
 #plt.show()
 print(location)
@@ -133,7 +148,8 @@ def removeCP(signal, a):
 def DFT(OFDM_RX):
     return np.fft.fft(OFDM_RX, N)
 
-def findLocation(location, data, rangeOfLocation = 3, pilotValue = 1+1j, pilotCarriers = pilotCarriers):
+####THIS DOESN'T WORK YET####
+def findLocationWithPilot(location, data, rangeOfLocation = 3, pilotValue = 1+1j, pilotCarriers = pilotCarriers):
     minValue = 100000
     for i in range(-rangeOfLocation, rangeOfLocation):
         OFDM_symbol = data[location + i:location+i+N+CP]
@@ -147,14 +163,15 @@ def findLocation(location, data, rangeOfLocation = 3, pilotValue = 1+1j, pilotCa
             print(minValue)
     return bestLocation, minValue
 
-bestLocation, minValue = findLocation(location, audio)
+bestLocation, minValue = findLocationWithPilot(location, audio)
 print(bestLocation)
 
 def removeZeros(position,data):
     return data[position:]
 
-audio = removeZeros(bestLocation, audio)
+audio = removeZeros(location, audio)
 
+###THIS DOESN'T WORK YET####
 def channelEstimate(OFDM_demod):
     pilots_pos = OFDM_demod[pilotCarriers]  # extract the pilot values from the RX signal
     pilots_neg = OFDM_demod[-pilotCarriers]
@@ -177,18 +194,19 @@ def channelEstimate(OFDM_demod):
     return Hest
 
 
-array2 = []
+dataArray = []
 for i in range(len(audio)//1056):
     data = audio[i*1056: 1056*(i+1)]
     data = removeCP(data, CP)
     data = DFT(data)
-    Hest = channelEstimate(data)
-    data = data/Hest
-    array2.append(data[1:512][dataCarriers-1]) #first value and 512th value are 0, 513-1023 are conjugate of 1-511 so do not hold any information
+    #Hest = channelEstimate(data)
+    #data = data/Hest
+    dataArray.append(data[1:512][dataCarriers-1]) #first value and 512th value are 0, 513-1023 are conjugate of 1-511 so do not hold any information
     
-array2 = np.array(array2).ravel()
+dataArray = np.array(dataArray).ravel()
 
-todisplay = array2[:511-P]
+todisplay = dataArray[:511-P]
+#print(todisplay)
 
 def Demapping(QPSK):
     # array of possible constellation points
@@ -212,6 +230,5 @@ for qpsk, hard in zip(todisplay, hardDecision):
     plt.plot([qpsk.real, hard.real], [qpsk.imag, hard.imag], 'b-o');
     plt.plot(hardDecision.real, hardDecision.imag, 'ro')
 plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Hard Decision demapping');
-#plt.show()
+plt.show()
 
-#print(todisplay)
