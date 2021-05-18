@@ -149,16 +149,41 @@ def findLocation(location, data, rangeOfLocation = 3, pilotValue = 1+1j, pilotCa
 
 bestLocation, minValue = findLocation(location, audio)
 print(bestLocation)
-array2 = []
+
 def removeZeros(position,data):
     return data[position:]
 
-data = removeZeros(bestLocation, audio)
+audio = removeZeros(bestLocation, audio)
 
+def channelEstimate(OFDM_demod):
+    pilots_pos = OFDM_demod[pilotCarriers]  # extract the pilot values from the RX signal
+    pilots_neg = OFDM_demod[-pilotCarriers]
+    Hest_at_pilots1 = pilots_pos / pilotValue # divide by the transmitted pilot values
+    Hest_at_pilots2 = pilots_neg / np.conj(pilotValue)
+    
+    Hest_at_pilots = np.append(Hest_at_pilots1, Hest_at_pilots2)
+    # Perform interpolation between the pilot carriers to get an estimate
+    # of the channel in the data carriers. Here, we interpolate absolute value and phase 
+    # separately
+    Hest_abs = scipy.interpolate.interp1d(np.append(pilotCarriers, N-pilotCarriers), abs(Hest_at_pilots), kind='linear', fill_value="extrapolate")(np.arange(N))
+    Hest_phase = scipy.interpolate.interp1d(np.append(pilotCarriers, N-pilotCarriers), np.angle(Hest_at_pilots), kind='linear', fill_value="extrapolate")(np.arange(N))
+    Hest = Hest_abs * np.exp(1j*Hest_phase)
+    
+    plt.stem(np.append(pilotCarriers, -pilotCarriers), abs(Hest_at_pilots), label='Pilot estimates')
+    plt.plot(np.arange(N), abs(Hest), label='Estimated channel via interpolation')
+    plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
+    plt.ylim(0,2)
+    plt.show()
+    return Hest
+
+
+array2 = []
 for i in range(len(audio)//1056):
     data = audio[i*1056: 1056*(i+1)]
     data = removeCP(data, CP)
     data = DFT(data)
+    Hest = channelEstimate(data)
+    data = data/Hest
     array2.append(data[1:512][dataCarriers-1]) #first value and 512th value are 0, 513-1023 are conjugate of 1-511 so do not hold any information
     
 array2 = np.array(array2).ravel()
