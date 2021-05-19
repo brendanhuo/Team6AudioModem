@@ -10,7 +10,7 @@ import soundfile as sf
 ####Configs######
 N = 1024 # DFT size
 K = 512 # number of OFDM subcarriers with information
-CP = K//8  # length of the cyclic prefix: 25% of the block
+CP = K//8  # length of the cyclic prefix
 P = K//8# number of pilot carriers per OFDM block
 pilotValue = 1+1j # The known value each pilot transmits
 
@@ -136,8 +136,8 @@ def CPsync(audio, limit = 10000, countLimit = CP//2, CP = CP):
             else:
                 corrlast = corr
                 count = 0
-    return location
-location = CPsync(audio) 
+    return location, corrArray
+location, corrarray = CPsync(audio) 
 #plt.plot(np.arange(len(corrArray[6700:6900])), corrArray[6700:6900])
 #plt.show()
 print(location)
@@ -149,13 +149,13 @@ def DFT(OFDM_RX):
     return np.fft.fft(OFDM_RX, N)
 
 ####THIS DOESN'T WORK YET####
-def findLocationWithPilot(location, data, rangeOfLocation = 3, pilotValue = 1+1j, pilotCarriers = pilotCarriers):
+def findLocationWithPilot(location, data, rangeOfLocation = 3, pilotValue = pilotValue, pilotCarriers = pilotCarriers):
     minValue = 100000
     for i in range(-rangeOfLocation, rangeOfLocation):
         OFDM_symbol = data[location + i:location+i+N+CP]
         OFDM_noCP = removeCP(OFDM_symbol, CP)
         OFDM_time = DFT(OFDM_noCP)
-        totalValue = np.sum(abs(OFDM_time[np.append(pilotCarriers, -pilotCarriers)]*np.conj(pilotValue).imag))
+        totalValue = np.sum(abs(OFDM_time[-pilotCarriers]*(pilotValue).imag))+np.sum(abs(OFDM_time[pilotCarriers]*np.conj(pilotValue).imag))
         print(totalValue)
         if totalValue < minValue:
             minValue = totalValue
@@ -171,7 +171,7 @@ def removeZeros(position,data):
 
 audio = removeZeros(location, audio)
 
-###THIS DOESN'T WORK YET####
+
 def channelEstimate(OFDM_demod):
     pilots_pos = OFDM_demod[pilotCarriers]  # extract the pilot values from the RX signal
     pilots_neg = OFDM_demod[-pilotCarriers]
@@ -186,7 +186,7 @@ def channelEstimate(OFDM_demod):
     Hest_phase = scipy.interpolate.interp1d(np.append(pilotCarriers, N-pilotCarriers), np.angle(Hest_at_pilots), kind='linear', fill_value="extrapolate")(np.arange(N))
     Hest = Hest_abs * np.exp(1j*Hest_phase)
     
-    plt.stem(np.append(pilotCarriers, -pilotCarriers), abs(Hest_at_pilots), label='Pilot estimates')
+    plt.stem(np.append(pilotCarriers, N-pilotCarriers), abs(Hest_at_pilots), label='Pilot estimates')
     plt.plot(np.arange(N), abs(Hest), label='Estimated channel via interpolation')
     plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
     plt.ylim(0,2)
@@ -195,17 +195,21 @@ def channelEstimate(OFDM_demod):
 
 
 dataArray = []
-for i in range(len(audio)//1056):
+dataArrayEqualized = []
+for i in range(len(audio[0:1056])//1056):
     data = audio[i*1056: 1056*(i+1)]
     data = removeCP(data, CP)
     data = DFT(data)
-    #Hest = channelEstimate(data)
-    #data = data/Hest
+    Hest = channelEstimate(data)
+    data_equalized = data/Hest
     dataArray.append(data[1:512][dataCarriers-1]) #first value and 512th value are 0, 513-1023 are conjugate of 1-511 so do not hold any information
-    
+    dataArrayEqualized.append(data_equalized[1:512][dataCarriers-1])
+
 dataArray = np.array(dataArray).ravel()
+dataArrayEqualized = np.array(dataArrayEqualized).ravel()
 
 todisplay = dataArray[:511-P]
+todisplayEqualized = dataArrayEqualized[:511-P]
 #print(todisplay)
 
 def Demapping(QPSK):
@@ -229,6 +233,13 @@ outputdata1, hardDecision = Demapping(todisplay)
 for qpsk, hard in zip(todisplay, hardDecision):
     plt.plot([qpsk.real, hard.real], [qpsk.imag, hard.imag], 'b-o');
     plt.plot(hardDecision.real, hardDecision.imag, 'ro')
+plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Hard Decision demapping');
+plt.show()
+
+outputdata2, hardDecision2 = Demapping(todisplayEqualized)
+for qpsk, hard in zip(todisplayEqualized, hardDecision2):
+    plt.plot([qpsk.real, hard.real], [qpsk.imag, hard.imag], 'b-o');
+    plt.plot(hardDecision2.real, hardDecision2.imag, 'ro')
 plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Hard Decision demapping');
 plt.show()
 
