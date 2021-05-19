@@ -157,28 +157,32 @@ def removeCP(signal, a):
 def DFT(OFDM_RX):
     return np.fft.fft(OFDM_RX, N)
 
-####THIS DOESN'T WORK YET####
-def findLocationWithPilot(location, data, rangeOfLocation = 3, pilotValue = pilotValue, pilotCarriers = pilotCarriers):
+def findLocationWithPilot(location, data, rangeOfLocation = 5, pilotValue = pilotValue, pilotCarriers = pilotCarriers):
     minValue = 100000
-    for i in range(-rangeOfLocation, rangeOfLocation):
+    for i in range(-rangeOfLocation+1, rangeOfLocation):
         OFDM_symbol = data[location + i:location+i+N+CP]
         OFDM_noCP = removeCP(OFDM_symbol, CP)
         OFDM_time = DFT(OFDM_noCP)
-        totalValue = np.sum(abs(OFDM_time[-pilotCarriers]*(pilotValue).imag))+np.sum(abs(OFDM_time[pilotCarriers]*np.conj(pilotValue).imag))
-        print(totalValue)
-        if totalValue < minValue:
-            minValue = totalValue
+        angle_values = np.angle(OFDM_time[pilotCarriers]/pilotValue)
+        plt.plot(pilotCarriers, angle_values, label = i)
+        
+        absSlope = abs(np.polyfit(pilotCarriers,angle_values,1)[0])
+
+        if absSlope < minValue:
+            minValue = absSlope
             bestLocation = i+location
             print(minValue)
     return bestLocation, minValue
 
 bestLocation, minValue = findLocationWithPilot(location, audio)
+plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('Anglular phase'); plt.legend(fontsize=10)
+plt.show()
 print(bestLocation)
 
 def removeZeros(position,data):
     return data[position:]
 
-audio = removeZeros(location, audio)
+audio = removeZeros(bestLocation, audio)
 
 
 def channelEstimate(OFDM_demod):
