@@ -14,8 +14,8 @@ from scipy import signal
 
 N = 1024 # DFT size
 K = 512 # number of OFDM subcarriers with information
-CP = K//8  # length of the cyclic prefix
-P = K//8# number of pilot carriers per OFDM block
+CP = K//4  # length of the cyclic prefix
+P = K//4# number of pilot carriers per OFDM block
 pilotValue = 1+1j # The known value each pilot transmits
 
 #Define the payload and pilot carriers
@@ -126,6 +126,83 @@ def channel(signal, channelResponse, SNRdb=20):
 
 OFDM_TX = sound
 OFDM_RX = channel(OFDM_TX, channelResponse)
+OFDM_RX = np.append(np.zeros(10000), OFDM_RX)
+
+#plt.plot(np.arange(len(OFDM_RX)), OFDM_RX)
+#plt.show()
+
+def removeCP(signal, a):
+    return signal[a:(a+N)]
+
+def DFT(OFDM_RX):
+    return np.fft.fft(OFDM_RX, N)
+
+def mapToDecode(audio, channelH):
+    dataArrayEqualized = []
+    for i in range(len(audio)//N+CP):
+        data = audio[i*(N+CP): (N+CP)*(i+1)]
+        data = removeCP(data, CP)
+        data = DFT(data)
+        Hest = channelH
+        data_equalized = data/Hest
+        dataArrayEqualized.append(data_equalized[1:512][dataCarriers-1])
+    return np.array(dataArrayEqualized).ravel()
+
+def CPsync(audio, limit = 15000, CP = CP):
+    corrArray = []
+    #count = 0
+    #corrlast = 0
+    #countLimit = CP//4
+    for i in range(limit):
+        corr = np.correlate(audio[i:i+CP], np.conj(audio[i+N:i+N+CP]))/CP
+        corrArray.append(corr)
+        '''if corr>corrlast:
+            count += 1
+            corrlast = corr
+        else:
+            if count > countLimit:
+                location = i-1
+                break
+            else:
+                corrlast = corr
+                count = 0'''
+    corrArray = np.array(corrArray).ravel()
+    indexes = scipy.signal.argrelextrema(
+    corrArray,
+    comparator=np.greater,order=2
+)
+    return indexes, corrArray
+peaks, corrArray = CPsync(OFDM_RX) 
+#plt.plot(corrArray)
+#plt.show()
+#print(peaks)
+
+def findLocationWithPilot(approxLocation, data, rangeOfLocation = 4, pilotValue = pilotValue, pilotCarriers = pilotCarriers):
+    minValue = 100000
+    for i in range(-rangeOfLocation+1, rangeOfLocation):
+        OFDM_symbol = data[approxLocation + i:approxLocation+i+N+CP]
+        OFDM_noCP = removeCP(OFDM_symbol, CP)
+        OFDM_time = DFT(OFDM_noCP)
+        angle_values = np.angle(OFDM_time[pilotCarriers]/pilotValue)
+        plt.plot(pilotCarriers, angle_values, label = i)
+        
+        absSlope = abs(np.polyfit(pilotCarriers,angle_values,1)[0])
+
+        if absSlope < minValue:
+            minValue = absSlope
+            bestLocation = i+approxLocation
+            print(minValue)
+    return bestLocation, minValue
+
+bestLocation, minValue = findLocationWithPilot(10000, OFDM_RX)
+plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('Anglular phase'); plt.legend(fontsize=10);
+plt.show()
+print(bestLocation)
+
+def removeZeros(position,data):
+    return data[position:]
+
+OFDM_RX = removeZeros(bestLocation, OFDM_RX)
 #plt.figure(figsize=(8,2))
 #plt.plot(abs(OFDM_TX), label='TX signal')
 #plt.plot(abs(OFDM_RX), label='RX signal')
@@ -134,6 +211,28 @@ OFDM_RX = channel(OFDM_TX, channelResponse)
 #plt.grid(True);
 #plt.show()
 #print(len(OFDM_RX))
+
+###NEED TO GET TO WORK###
+def channelEstimate(OFDM_demod):
+    pilots_pos = OFDM_demod[pilotCarriers]  # extract the pilot values from the RX signal
+    pilots_neg = OFDM_demod[-pilotCarriers]
+    Hest_at_pilots1 = pilots_pos / pilotValue # divide by the transmitted pilot values
+    Hest_at_pilots2 = pilots_neg / np.conj(pilotValue)
+    
+    Hest_at_pilots = np.append(Hest_at_pilots1, Hest_at_pilots2)
+    # Perform interpolation between the pilot carriers to get an estimate
+    # of the channel in the data carriers. Here, we interpolate absolute value and phase 
+    # separately
+    Hest_abs = scipy.interpolate.interp1d(np.append(pilotCarriers, N-pilotCarriers), abs(Hest_at_pilots), kind='linear', fill_value="extrapolate")(np.arange(N))
+    Hest_phase = scipy.interpolate.interp1d(np.append(pilotCarriers, N-pilotCarriers), np.angle(Hest_at_pilots), kind='linear', fill_value="extrapolate")(np.arange(N))
+    Hest = Hest_abs * np.exp(1j*Hest_phase)
+    
+    #plt.stem(np.append(pilotCarriers, N-pilotCarriers), abs(Hest_at_pilots), label='Pilot estimates')
+    #plt.plot(np.arange(N), abs(Hest), label='Estimated channel via interpolation')
+    #plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
+    #plt.ylim(0,2)
+    #plt.show()
+    return Hest
 
 chirp_filtered = channel(exponentialChirp, channelResponse)
 
@@ -174,7 +273,7 @@ def chirp_estimator_test(audio, samples=30, f1=60.0, f2=6000.0, T=5, fs=44100, a
     h = h[position:int(position + samples)]
 
     H2 = np.fft.fft(h, N)
-
+    '''
     plt.plot(np.linspace(0, len(h) / fs, len(h), False), h)
     plt.title('Measured Impulse Response')
     plt.xlabel('Time (s)')
@@ -188,34 +287,17 @@ def chirp_estimator_test(audio, samples=30, f1=60.0, f2=6000.0, T=5, fs=44100, a
     plt.ylabel('Relative Amplitude')
     plt.grid(True)
     plt.show()
-    
+
     #plt.semilogy(np.linspace(0, fs, len(H2), False), abs(H2), label = 'measured H')
     plt.plot(np.arange(len(H2)), abs(H2), label = 'measured H')
     plt.plot(np.arange(N), abs(actualH), label = 'actual H')
-    plt.xlabel('FT index'); plt.ylabel('$|H(f)|$'); plt.grid(True); plt.xlim(0, N); plt.legend()
-    plt.show()
+    plt.xlabel('FT index'); plt.ylabel('$|H(f)|$'); plt.grid(True); plt.xlim(0, N); plt.legend();
+    plt.show()'''
     return h, H2, position
 
 h2, H2, position = chirp_estimator_test(chirp_filtered)
 
 print(position)
-
-def removeCP(signal, a):
-    return signal[a:(a+N)]
-
-def DFT(OFDM_RX):
-    return np.fft.fft(OFDM_RX, N)
-
-def mapToDecode(audio, channelResponse):
-    dataArrayEqualized = []
-    for i in range(len(audio)//N+CP):
-        data = audio[i*(N+CP): (N+CP)*(i+1)]
-        data = removeCP(data, CP)
-        data = DFT(data)
-        Hest = channelResponse
-        data_equalized = data/Hest
-        dataArrayEqualized.append(data_equalized[1:512][dataCarriers-1])
-    return np.array(dataArrayEqualized).ravel()
 
 OFDM_todemap = mapToDecode(OFDM_RX, H)
 

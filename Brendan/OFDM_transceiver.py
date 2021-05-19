@@ -127,7 +127,7 @@ audio = audioDataFromFile('test_speaker_info.wav')
 #append some zeros infront to simulate some simplistic synchronisation issue
 audio = np.append(np.zeros(6790), audio)
 
-def CPsync(audio, limit = 10000, countLimit = CP//2, CP = CP):
+def CPsync(audio, limit = 10000, CP = CP):
     corrArray = []
     count = 0
     corrlast = 0
@@ -146,7 +146,7 @@ def CPsync(audio, limit = 10000, countLimit = CP//2, CP = CP):
                 corrlast = corr
                 count = 0
     return location, corrArray
-location, corrarray = CPsync(audio) 
+location, corrArray = CPsync(audio) 
 #plt.plot(np.arange(len(corrArray[6700:6900])), corrArray[6700:6900])
 #plt.show()
 print(location)
