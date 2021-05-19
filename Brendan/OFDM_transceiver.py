@@ -53,20 +53,21 @@ def OFDM_symbol(QPSK_payload):
 def IDFT(OFDM_data):
     return np.fft.ifft(OFDM_data)
 
-
 def addCP(OFDM_time):
     cp = OFDM_time[-CP:]               # take the last CP samples ...
     return np.hstack([cp, OFDM_time])  # ... and add them to the beginning
 
-sound_array = []
-for section in bits_SP:
-    QPSK = Mapping(section)
-    OFDM_data = OFDM_symbol(QPSK)
-    OFDM_time = IDFT(OFDM_data)
-    OFDM_withCP = addCP(OFDM_time)
-    sound_array.append(OFDM_withCP.real)
+def mapToTransmit(bits_SP):
+    sound_array = []
+    for section in bits_SP:
+        QPSK = Mapping(section)
+        OFDM_data = OFDM_symbol(QPSK)
+        OFDM_time = IDFT(OFDM_data)
+        OFDM_withCP = addCP(OFDM_time)
+        sound_array.append(OFDM_withCP.real)
+    return np.array(sound_array).ravel()
 
-sound_array = np.array(sound_array).ravel()
+sound_array = mapToTransmit(bits_SP)
 
 ###Some Audio Functions###
 
@@ -97,6 +98,14 @@ def sound(array, fs=44100):
     stream.close()
     p.terminate()
 
+def record(seconds):
+    myrecording = sd.rec(int(seconds * sd.default.samplerate))
+    print("recording")
+    print(sd.default.device)
+    sd.wait()  # Wait until recording is finished
+    print("done")
+    return myrecording
+
 def audioDataFromFile(filename):
     data, fs = sf.read(filename, dtype='float32')  
     return data
@@ -124,7 +133,7 @@ def CPsync(audio, limit = 10000, countLimit = CP//2, CP = CP):
     corrlast = 0
     countLimit = CP//2
     for i in range(limit):
-        corr = np.correlate(audio[i:i+CP], audio[i+N:i+N+CP]/CP)
+        corr = np.correlate(audio[i:i+CP], np.conj(audio[i+N:i+N+CP]))/CP
         corrArray.append(corr)
         if corr>corrlast:
             count += 1
@@ -186,17 +195,17 @@ def channelEstimate(OFDM_demod):
     Hest_phase = scipy.interpolate.interp1d(np.append(pilotCarriers, N-pilotCarriers), np.angle(Hest_at_pilots), kind='linear', fill_value="extrapolate")(np.arange(N))
     Hest = Hest_abs * np.exp(1j*Hest_phase)
     
-    plt.stem(np.append(pilotCarriers, N-pilotCarriers), abs(Hest_at_pilots), label='Pilot estimates')
-    plt.plot(np.arange(N), abs(Hest), label='Estimated channel via interpolation')
-    plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
-    plt.ylim(0,2)
-    plt.show()
+    #plt.stem(np.append(pilotCarriers, N-pilotCarriers), abs(Hest_at_pilots), label='Pilot estimates')
+    #plt.plot(np.arange(N), abs(Hest), label='Estimated channel via interpolation')
+    #plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
+    #plt.ylim(0,2)
+    #plt.show()
     return Hest
 
 
 dataArray = []
 dataArrayEqualized = []
-for i in range(len(audio[0:1056])//1056):
+for i in range(len(audio)//1056):
     data = audio[i*1056: 1056*(i+1)]
     data = removeCP(data, CP)
     data = DFT(data)
@@ -210,7 +219,7 @@ dataArrayEqualized = np.array(dataArrayEqualized).ravel()
 
 todisplay = dataArray[:511-P]
 todisplayEqualized = dataArrayEqualized[:511-P]
-#print(todisplay)
+print(len(todisplay))
 
 def Demapping(QPSK):
     # array of possible constellation points
@@ -241,5 +250,5 @@ for qpsk, hard in zip(todisplayEqualized, hardDecision2):
     plt.plot([qpsk.real, hard.real], [qpsk.imag, hard.imag], 'b-o');
     plt.plot(hardDecision2.real, hardDecision2.imag, 'ro')
 plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Hard Decision demapping');
-plt.show()
+#plt.show()
 
