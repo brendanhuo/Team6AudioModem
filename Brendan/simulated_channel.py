@@ -15,8 +15,8 @@ import bitarray
 from numpy.random import default_rng
 
 
-N = 1024 # DFT size
-K = 512 # number of OFDM subcarriers with information
+N = 8192 # DFT size
+K = N//2 # number of OFDM subcarriers with information
 CP = K//4  # length of the cyclic prefix
 P = K//16# number of pilot carriers per OFDM block
 pilotValue = 1+1j # The known value each pilot transmits
@@ -139,6 +139,13 @@ knownOFDMBlock = knownOFDMBlock()
 sound = mapToTransmit(bits_SP)
 #print(len(sound))
 
+####Combine chirp, known OFDM symbols, and OFDM data blocks to get total sound to transmit
+toSendOverActualChannel = np.concatenate((np.zeros(44100),exponentialChirp.ravel(), knownOFDMBlock, sound))
+
+plt.plot(toSendOverActualChannel)
+plt.show()
+write('sound_to_transmit.wav', 44100, toSendOverActualChannel)
+
 #SIMULATED CHANNEL
 def channel(signal, channelResponse, SNRdb=25):
     """Creates a simulated channel with given channel impulse response and white Gaussian noise"""
@@ -230,7 +237,7 @@ def mapToDecode(audio, channelH):
         Hest = channelEstimate(data)
         #Hest = channelH
         data_equalized = data/Hest
-        dataArrayEqualized.append(data_equalized[1:512][dataCarriers-1])
+        dataArrayEqualized.append(data_equalized[1:K][dataCarriers-1])
     return np.array(dataArrayEqualized).ravel()
 
 ####Channel Estimation using known OFDM symbols####
@@ -421,7 +428,7 @@ outputdata1, hardDecision = Demapping(OFDM_todemap)
 for qpsk, hard in zip(OFDM_todemap[0:400], hardDecision[0:400]):
     plt.plot([qpsk.real, hard.real], [qpsk.imag, hard.imag], 'b-o');
     #plt.plot(hardDecision[0:400].real, hardDecision[0:400].imag, 'ro')
-plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Democulated Constellation');
+plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Demodulated Constellation');
 plt.show()
 
 data1tocsv = outputdata1.ravel()
