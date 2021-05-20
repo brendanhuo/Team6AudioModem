@@ -165,9 +165,9 @@ knownOFDMBlock_RX = channel(knownOFDMBlock, channelResponse)
 ####CHANNEL ESTIMATION USING KNOWN OFDM SYMBOLS#####
 def channelEstimateKnownOFDM(knownOFDMBlock, randomSeedStart = seedStart, N = N, CP = CP):
     numberOfBlocks = len(knownOFDMBlock) // (N+CP)
-    Hest_abs = 0
-    Hest_phase = 0
-    #print(numberOfBlocks)
+
+    Hest_at_symbols = np.zeros(N)
+
     for i in range(numberOfBlocks):
         rng = default_rng(randomSeedStart + i)
         bits = rng.binomial(n=1, p=0.5, size=((K-1)*2))
@@ -175,23 +175,18 @@ def channelEstimateKnownOFDM(knownOFDMBlock, randomSeedStart = seedStart, N = N,
         symbol = np.array([mapping_table[tuple(b)] for b in bits_SP])
         expectedSymbols = np.append(np.append(0, symbol), np.append(0,np.conj(symbol)[::-1]))
 
-        receivedSymbols = knownOFDMBlock[i:i*(N+CP)]
+        receivedSymbols = knownOFDMBlock[i*(N+CP):(i+1)*(N+CP)]
         receivedSymbols = removeCP(receivedSymbols, CP)
         receivedSymbols = DFT(receivedSymbols)
-        
-        Hest_at_symbols = receivedSymbols / expectedSymbols
 
-        Hest_abs = (Hest_abs * (i-1) + scipy.interpolate.interp1d(np.arange(len(receivedSymbols)), abs(Hest_at_symbols), kind='cubic', fill_value="extrapolate")(np.arange(N)))/i
-        Hest_phase = (Hest_phase * (i-1) + scipy.interpolate.interp1d(np.arange(len(receivedSymbols)), np.angle(Hest_at_symbols), kind='cubic', fill_value="extrapolate")(np.arange(N)))/i
-        
-    Hest = Hest_abs * np.exp(1j*Hest_phase)
+        Hest_at_symbols = (Hest_at_symbols * i + receivedSymbols / expectedSymbols) / (i+1) #Averaging over past OFDM blocks
 
     plt.plot(np.arange(N), H, label = 'actual H')
-    plt.plot(np.arange(N), abs(Hest), label='Estimated H via cubic interpolation')
+    plt.plot(np.arange(N), abs(Hest_at_symbols), label='Estimated H via cubic interpolation')
     plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
     plt.show()
 
-    return Hest
+    return Hest_at_symbols
 
 ####CHANNEL ESTIMATION USING PILOT SYMBOLS####
 def channelEstimate(OFDM_demod):
@@ -238,7 +233,7 @@ def mapToDecode(audio, channelH):
     return np.array(dataArrayEqualized).ravel()
 
 ####Channel Estimation using known OFDM symbols####
-Hest_known_symbols = channelEstimateKnownOFDM(knownOFDMBlock)
+Hest_known_symbols = channelEstimateKnownOFDM(knownOFDMBlock_RX)
 
 #####THIS DOES NOT WORK WELL, USE CHIRP TO SYNCHRONISE INSTEAD####
 def CPsync(audio, limit = 15000, CP = CP):
@@ -272,6 +267,7 @@ peaks, corrArray = CPsync(OFDM_RX)
 #plt.show()
 #print(peaks)
 
+####SYNCHRONISATION USING PILOT SYMBOls####
 def findLocationWithPilot(approxLocation, data, rangeOfLocation = 4, pilotValue = pilotValue, pilotCarriers = pilotCarriers):
     """Performs fine synchronization using pilot symbols"""
     minValue = 100000
