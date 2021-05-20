@@ -174,7 +174,7 @@ knownOFDMBlock_RX = channel(knownOFDMBlock, channelResponse)
 def channelEstimateKnownOFDM(knownOFDMBlock, randomSeedStart = seedStart, N = N, CP = CP):
     numberOfBlocks = len(knownOFDMBlock) // (N+CP)
 
-    Hest_at_symbols = np.zeros(N)
+    Hest_at_symbols = np.zeros(N, dtype = complex)
 
     for i in range(numberOfBlocks):
         rng = default_rng(randomSeedStart + i)
@@ -186,15 +186,27 @@ def channelEstimateKnownOFDM(knownOFDMBlock, randomSeedStart = seedStart, N = N,
         receivedSymbols = knownOFDMBlock[i*(N+CP):(i+1)*(N+CP)]
         receivedSymbols = removeCP(receivedSymbols, CP)
         receivedSymbols = DFT(receivedSymbols)
-
-        Hest_at_symbols = (Hest_at_symbols * i + receivedSymbols / expectedSymbols) / (i+1) #Averaging over past OFDM blocks
-
+            
+        for j in range(N):
+            if j == N//2 or j == 0:
+                Hest_at_symbols[j] == 0
+            else:
+                div = (receivedSymbols[j]/expectedSymbols[j] )
+                Hest_at_symbols[j] = (Hest_at_symbols[j] * i + div) / (i + 1) #Average over past OFDM blocks
+                    
+    impulse = np.fft.ifft(Hest_at_symbols)
+    
+    plt.figure(1)
     plt.plot(np.arange(N), H, label = 'actual H')
     plt.plot(np.arange(N), abs(Hest_at_symbols), label='Estimated H via cubic interpolation')
     plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
+    plt.figure(2)
+    plt.plot(impulse[0:30], label = 'measured impulse')
+    #plt.plot(channelResponse, label = 'actual impulse')
+    plt.grid(True); plt.xlabel('samples'); plt.ylabel('h(t)'); plt.legend(fontsize=10)
     plt.show()
 
-    return Hest_at_symbols
+    return Hest_at_symbols, impulse
 
 ####CHANNEL ESTIMATION USING PILOT SYMBOLS####
 def channelEstimate(OFDM_demod):
@@ -241,7 +253,7 @@ def mapToDecode(audio, channelH):
     return np.array(dataArrayEqualized).ravel()
 
 ####Channel Estimation using known OFDM symbols####
-Hest_known_symbols = channelEstimateKnownOFDM(knownOFDMBlock_RX)
+Hest_known_symbols, impulse = channelEstimateKnownOFDM(knownOFDMBlock_RX)
 
 #####THIS DOES NOT WORK WELL, USE CHIRP TO SYNCHRONISE INSTEAD####
 def CPsync(audio, limit = 15000, CP = CP):
