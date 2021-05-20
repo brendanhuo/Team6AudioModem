@@ -46,7 +46,8 @@ ba.frombytes(contents.encode('utf-8'))
 ba = np.array(ba.tolist())
 
 ###IMPORT CHIRP###
-def exponential_chirp(T=10.0, f1=60.0, f2=6000.0, window_strength=10.0, fs=44100):
+chirpLength = 1
+def exponential_chirp(T=chirpLength, f1=60.0, f2=6000.0, window_strength=10.0, fs=44100):
     """Produces chirp and returns impulse characteristics"""
 
     t_list = np.linspace(0, T, int(round(T * fs)), False)
@@ -313,7 +314,8 @@ chirp_filtered = channel(exponentialChirp, channelResponse)
 #Add some zeros in front to test synchronisation
 chirp_filtered = np.append(np.zeros(10000), chirp_filtered)
 
-def chirp_estimator_test(audio, samples=30, f1=60.0, f2=6000.0, T=5, fs=44100, actualH = H):
+#Synchronisation using chirp
+def chirp_synchroniser(audio, f1=60.0, f2=6000.0, T=chirpLength, fs=44100):
     """Tries to estimate impulse response and perform gross synchronization using a chirp"""
     x = exponential_chirp(T)
     x_r = x[::-1]
@@ -324,13 +326,39 @@ def chirp_estimator_test(audio, samples=30, f1=60.0, f2=6000.0, T=5, fs=44100, a
 
     x_r = x_r / np.linalg.norm(x_r)
 
-    y = audio / np.linalg.norm(audio)
+    # Format and normalise
+    y = audio
+    y = y / np.linalg.norm(y)
+
     # Convolve output with x_r
     h = signal.fftconvolve(x_r, y)
 
     # Estimate Impulse Response start point
     position = np.where(h == np.amax(h))[0][0]
-    
+
+    return position-T*fs
+
+def chirp_test(audio, samples=2000, f1=60.0, f2=6000.0, T=chirpLength, fs=44100, channelH = H, N = N):
+    # Create chirp, and time reversed signal x_r
+    x = exponential_chirp(T)
+    x_r = x[::-1]
+
+    # Apply exponential envelope and normalise
+    for i in range(len(x_r)):
+        x_r[i] = x_r[i] * math.e ** (-(i / (T * fs)) * math.log2(f2 / f1))
+
+    x_r = x_r / np.linalg.norm(x_r)
+
+    # Format and normalise
+    y = audio
+    y = y / np.linalg.norm(y)
+
+    # Convolve output with x_r
+    h = signal.fftconvolve(x_r, y)
+
+    # Estimate Impulse Response start point
+    position = np.where(h == np.amax(h))[0][0]
+
     # Find closest 0 to estimate above and set as Impulse Response start point
     i = 1
     while True:
@@ -338,7 +366,7 @@ def chirp_estimator_test(audio, samples=30, f1=60.0, f2=6000.0, T=5, fs=44100, a
             i += 1
         else:
             break
-    position -= i
+    #position -= i
     if abs(h[position]) > abs(h[position - 1]):
         position -= 1
     h[position] = 0
@@ -347,8 +375,8 @@ def chirp_estimator_test(audio, samples=30, f1=60.0, f2=6000.0, T=5, fs=44100, a
     h_0 = h
     h = h[position:int(position + samples)]
 
-    H2 = np.fft.fft(h, N)
-    '''
+    # View results
+
     plt.plot(np.linspace(0, len(h) / fs, len(h), False), h)
     plt.title('Measured Impulse Response')
     plt.xlabel('Time (s)')
@@ -356,22 +384,17 @@ def chirp_estimator_test(audio, samples=30, f1=60.0, f2=6000.0, T=5, fs=44100, a
     plt.grid(True)
     plt.show()
 
-    plt.plot(np.linspace(0, len(h_0) / fs, len(h_0), False), h_0)
-    plt.title('Full Recording')
-    plt.xlabel('Time (s)')
-    plt.ylabel('Relative Amplitude')
+    # Find Frequency Response
+    H = np.fft.fft(h, N)
+    plt.plot(abs(H), label = 'chirp estimated H')
+    plt.plot(abs(channelH), label = 'actual H')
     plt.grid(True)
+    plt.legend()
     plt.show()
 
-    #plt.semilogy(np.linspace(0, fs, len(H2), False), abs(H2), label = 'measured H')
-    plt.plot(np.arange(len(H2)), abs(H2), label = 'measured H')
-    plt.plot(np.arange(N), abs(actualH), label = 'actual H')
-    plt.xlabel('FT index'); plt.ylabel('$|H(f)|$'); plt.grid(True); plt.xlim(0, N); plt.legend();
-    plt.show()'''
-    return h, H2, position
-
-h2, H2, position = chirp_estimator_test(chirp_filtered)
-#print(position)
+    return h, H, position-fs*T
+position = chirp_synchroniser(chirp_filtered)
+print(position)
 ####END OF CHIRP STUFF####
 
 OFDM_todemap = mapToDecode(OFDM_RX, H)
