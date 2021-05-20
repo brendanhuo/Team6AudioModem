@@ -12,6 +12,8 @@ import binascii
 import math 
 from scipy import signal
 import bitarray
+from numpy.random import default_rng
+
 
 N = 1024 # DFT size
 K = 512 # number of OFDM subcarriers with information
@@ -95,7 +97,7 @@ def OFDM_symbol(QPSK_payload):
 
 
 def IDFT(OFDM_data):
-    """TAke IDFT"""
+    """Take IDFT"""
     return np.fft.ifft(OFDM_data)
 
 def addCP(OFDM_time):
@@ -114,6 +116,25 @@ def mapToTransmit(bits_SP):
         sound_array.append(OFDM_withCP.real)
     return np.array(sound_array).ravel()
 
+#####KNOWN OFDM SYMBOLS GENERATION####    
+seedStart = 2000
+def knownOFDMBlock(blocknum = 10, randomSeedStart = seedStart, K = K):
+    knownOFDMBlock = []
+    for i in range(blocknum):
+        rng = default_rng(randomSeedStart + i)
+        bits = rng.binomial(n=1, p=0.5, size=((K-1)*2))
+        bits_SP = bits.reshape(len(bits)//mu, mu)
+        symbol = np.array([mapping_table[tuple(b)] for b in bits_SP])
+        symbol = np.append(np.append(0, symbol), np.append(0,np.conj(symbol)[::-1]))
+        OFDM_time = IDFT(symbol)
+        OFDM_withCP = addCP(OFDM_time)
+        knownOFDMBlock.append(OFDM_withCP.real)
+        
+    return np.array(knownOFDMBlock).ravel()
+
+knownOFDMBlock = knownOFDMBlock()
+
+    
 sound = mapToTransmit(bits_SP)
 #print(len(sound))
 
@@ -134,9 +155,45 @@ OFDM_TX = sound
 OFDM_RX = channel(OFDM_TX, channelResponse)
 OFDM_RX = np.append(np.zeros(10000), OFDM_RX)
 
+
+knownOFDMBlock_RX = channel(knownOFDMBlock, channelResponse)
+
 #plt.plot(np.arange(len(OFDM_RX)), OFDM_RX)
 #plt.show()
 
+
+####CHANNEL ESTIMATION USING KNOWN OFDM SYMBOLS#####
+def channelEstimateKnownOFDM(knownOFDMBlock, randomSeedStart = seedStart, N = N, CP = CP):
+    numberOfBlocks = len(knownOFDMBlock) // (N+CP)
+    Hest_abs = 0
+    Hest_phase = 0
+    #print(numberOfBlocks)
+    for i in range(numberOfBlocks):
+        rng = default_rng(randomSeedStart + i)
+        bits = rng.binomial(n=1, p=0.5, size=((K-1)*2))
+        bits_SP = bits.reshape(len(bits)//mu, mu)
+        symbol = np.array([mapping_table[tuple(b)] for b in bits_SP])
+        expectedSymbols = np.append(np.append(0, symbol), np.append(0,np.conj(symbol)[::-1]))
+
+        receivedSymbols = knownOFDMBlock[i:i*(N+CP)]
+        receivedSymbols = removeCP(receivedSymbols, CP)
+        receivedSymbols = DFT(receivedSymbols)
+        
+        Hest_at_symbols = receivedSymbols / expectedSymbols
+
+        Hest_abs = (Hest_abs * (i-1) + scipy.interpolate.interp1d(np.arange(len(receivedSymbols)), abs(Hest_at_symbols), kind='cubic', fill_value="extrapolate")(np.arange(N)))/i
+        Hest_phase = (Hest_phase * (i-1) + scipy.interpolate.interp1d(np.arange(len(receivedSymbols)), np.angle(Hest_at_symbols), kind='cubic', fill_value="extrapolate")(np.arange(N)))/i
+        
+    Hest = Hest_abs * np.exp(1j*Hest_phase)
+
+    plt.plot(np.arange(N), H, label = 'actual H')
+    plt.plot(np.arange(N), abs(Hest), label='Estimated H via cubic interpolation')
+    plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
+    plt.show()
+
+    return Hest
+
+####CHANNEL ESTIMATION USING PILOT SYMBOLS####
 def channelEstimate(OFDM_demod):
     """Performs channel estimation using pilot values"""
     pilots_pos = OFDM_demod[pilotCarriers]  # extract the pilot values from the RX signal
@@ -152,7 +209,7 @@ def channelEstimate(OFDM_demod):
     Hest_phase = scipy.interpolate.interp1d(np.append(pilotCarriers, N-pilotCarriers).ravel(), np.angle(Hest_at_pilots), kind='cubic', fill_value="extrapolate")(np.arange(N))
     Hest = Hest_abs * np.exp(1j*Hest_phase)
     
-    #plt.plot(np.arange(N), H, label = 'actual H')
+    #lt.plot(np.arange(N), H, label = 'actual H')
     #plt.stem(np.append(pilotCarriers, N-pilotCarriers), abs(Hest_at_pilots), label='Pilot estimates')
     #plt.plot(np.arange(N), abs(Hest), label='Estimated H via cubic interpolation')
     #plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
@@ -179,6 +236,9 @@ def mapToDecode(audio, channelH):
         data_equalized = data/Hest
         dataArrayEqualized.append(data_equalized[1:512][dataCarriers-1])
     return np.array(dataArrayEqualized).ravel()
+
+####Channel Estimation using known OFDM symbols####
+Hest_known_symbols = channelEstimateKnownOFDM(knownOFDMBlock)
 
 #####THIS DOES NOT WORK WELL, USE CHIRP TO SYNCHRONISE INSTEAD####
 def CPsync(audio, limit = 15000, CP = CP):
@@ -339,11 +399,11 @@ def Demapping(QPSK):
     return np.vstack([demapping_table[C] for C in hardDecision]), hardDecision
 
 outputdata1, hardDecision = Demapping(OFDM_todemap)
-#for qpsk, hard in zip(OFDM_todemap[0:400], hardDecision[0:400]):
-#    plt.plot([qpsk.real, hard.real], [qpsk.imag, hard.imag], 'b-o');
-#    #plt.plot(hardDecision[0:400].real, hardDecision[0:400].imag, 'ro')
-#plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Democulated Constellation');
-#plt.show()
+for qpsk, hard in zip(OFDM_todemap[0:400], hardDecision[0:400]):
+    plt.plot([qpsk.real, hard.real], [qpsk.imag, hard.imag], 'b-o');
+    #plt.plot(hardDecision[0:400].real, hardDecision[0:400].imag, 'ro')
+plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Democulated Constellation');
+plt.show()
 
 data1tocsv = outputdata1.ravel()
 demodulatedOutput = ''.join(str(e) for e in data1tocsv)
