@@ -11,17 +11,18 @@ import bitarray
 import binascii
 import math 
 from scipy import signal
+import bitarray
 
 N = 1024 # DFT size
 K = 512 # number of OFDM subcarriers with information
 CP = K//4  # length of the cyclic prefix
-P = K//4# number of pilot carriers per OFDM block
+P = K//16# number of pilot carriers per OFDM block
 pilotValue = 1+1j # The known value each pilot transmits
 
 #Define the payload and pilot carriers
 allCarriers = np.arange(K)  # indices of all subcarriers ([0, 1, ... K-1])
 
-pilotCarriers = allCarriers[1::K//P] # Pilots is every (K/P)th carrier.
+pilotCarriers = allCarriers[1::K//P] # Pilots is every (K//P)th carrier.
 
 dataCarriers = np.delete(allCarriers, pilotCarriers)
 dataCarriers = np.delete(dataCarriers, 0)
@@ -37,7 +38,6 @@ H = np.fft.fft(channelResponse, N)
 with open("./Brendan/test_file.txt") as f:
     contents = f.read()
 
-import bitarray
 ba = bitarray.bitarray()
 ba.frombytes(contents.encode('utf-8'))
 
@@ -79,12 +79,14 @@ demapping_table = {v : k for k, v in mapping_table.items()}
 ba = np.append(ba, np.zeros(len(dataCarriers)*2 - (len(ba) - len(ba)//mu//len(dataCarriers) * len(dataCarriers) * mu)))
 bits_SP = ba.reshape((len(ba)//mu//len(dataCarriers), len(dataCarriers), mu))
 
-print(bits_SP.shape[0]) #Number of OFDM symbols
+#print(bits_SP.shape[0]) #Number of OFDM symbols
 
 def Mapping(bits):
+    """Maps each batch of bits to a constellation symbol"""
     return np.array([mapping_table[tuple(b)] for b in bits])
 
 def OFDM_symbol(QPSK_payload):
+    """Assigns pilot values and payload values to OFDM symbol, take reverse complex conjugate and append to end to make signal passband"""
     symbol = np.zeros(K, dtype=complex) # the overall K subcarriers
     symbol[pilotCarriers] = pilotValue  # allocate the pilot subcarriers 
     symbol[dataCarriers] = QPSK_payload  # allocate the data subcarriers
@@ -93,13 +95,16 @@ def OFDM_symbol(QPSK_payload):
 
 
 def IDFT(OFDM_data):
+    """TAke IDFT"""
     return np.fft.ifft(OFDM_data)
 
 def addCP(OFDM_time):
+    """Adds cyclic prefix"""
     cp = OFDM_time[-CP:]               # take the last CP samples ...
     return np.hstack([cp, OFDM_time])  # ... and add them to the beginning
 
 def mapToTransmit(bits_SP):
+    """Create full sequence to transmit through speakers"""
     sound_array = []
     for section in bits_SP:
         QPSK = Mapping(section)
@@ -113,12 +118,13 @@ sound = mapToTransmit(bits_SP)
 #print(len(sound))
 
 #SIMULATED CHANNEL
-def channel(signal, channelResponse, SNRdb=20):
+def channel(signal, channelResponse, SNRdb=25):
+    """Creates a simulated channel with given channel impulse response and white Gaussian noise"""
     convolved = np.convolve(signal, channelResponse)
     signal_power = np.mean(abs(convolved**2))
     sigma2 = signal_power * 10**(-SNRdb/10)  # calculate noise power based on signal power and SNR
     
-    print ("RX Signal power: %.4f. Noise power: %.4f" % (signal_power, sigma2))
+    #print ("RX Signal power: %.4f. Noise power: %.4f" % (signal_power, sigma2))
     
     # Generate complex noise with given variance
     noise = np.sqrt(sigma2/2) * (np.random.randn(*convolved.shape)+1j*np.random.randn(*convolved.shape))
@@ -131,24 +137,52 @@ OFDM_RX = np.append(np.zeros(10000), OFDM_RX)
 #plt.plot(np.arange(len(OFDM_RX)), OFDM_RX)
 #plt.show()
 
+def channelEstimate(OFDM_demod):
+    """Performs channel estimation using pilot values"""
+    pilots_pos = OFDM_demod[pilotCarriers]  # extract the pilot values from the RX signal
+    pilots_neg = OFDM_demod[-pilotCarriers]
+    Hest_at_pilots1 = pilots_pos / pilotValue # divide by the transmitted pilot values
+    Hest_at_pilots2 = pilots_neg / np.conj(pilotValue)
+    
+    Hest_at_pilots = np.append(Hest_at_pilots1, Hest_at_pilots2).ravel()
+    # Perform interpolation between the pilot carriers to get an estimate
+    # of the channel in the data carriers. Here, we interpolate absolute value and phase 
+    # separately
+    Hest_abs = scipy.interpolate.interp1d(np.append(pilotCarriers, N-pilotCarriers).ravel(), abs(Hest_at_pilots), kind='cubic', fill_value="extrapolate")(np.arange(N))
+    Hest_phase = scipy.interpolate.interp1d(np.append(pilotCarriers, N-pilotCarriers).ravel(), np.angle(Hest_at_pilots), kind='cubic', fill_value="extrapolate")(np.arange(N))
+    Hest = Hest_abs * np.exp(1j*Hest_phase)
+    
+    #plt.plot(np.arange(N), H, label = 'actual H')
+    #plt.stem(np.append(pilotCarriers, N-pilotCarriers), abs(Hest_at_pilots), label='Pilot estimates')
+    #plt.plot(np.arange(N), abs(Hest), label='Estimated H via cubic interpolation')
+    #plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
+    #plt.show()
+    return Hest
+
 def removeCP(signal, a):
+    """Removes cyclic prefix"""
     return signal[a:(a+N)]
 
 def DFT(OFDM_RX):
+    """Takes DFT"""
     return np.fft.fft(OFDM_RX, N)
 
 def mapToDecode(audio, channelH):
+    """Builds demodulated constellation symbol from OFDM symbols"""
     dataArrayEqualized = []
     for i in range(len(audio)//N+CP):
         data = audio[i*(N+CP): (N+CP)*(i+1)]
         data = removeCP(data, CP)
         data = DFT(data)
-        Hest = channelH
+        Hest = channelEstimate(data)
+        #Hest = channelH
         data_equalized = data/Hest
         dataArrayEqualized.append(data_equalized[1:512][dataCarriers-1])
     return np.array(dataArrayEqualized).ravel()
 
+#####THIS DOES NOT WORK WELL, USE CHIRP TO SYNCHRONISE INSTEAD####
 def CPsync(audio, limit = 15000, CP = CP):
+    """Synchronization using cyclic prefix"""
     corrArray = []
     #count = 0
     #corrlast = 0
@@ -172,12 +206,14 @@ def CPsync(audio, limit = 15000, CP = CP):
     comparator=np.greater,order=2
 )
     return indexes, corrArray
+
 peaks, corrArray = CPsync(OFDM_RX) 
 #plt.plot(corrArray)
 #plt.show()
 #print(peaks)
 
 def findLocationWithPilot(approxLocation, data, rangeOfLocation = 4, pilotValue = pilotValue, pilotCarriers = pilotCarriers):
+    """Performs fine synchronization using pilot symbols"""
     minValue = 100000
     for i in range(-rangeOfLocation+1, rangeOfLocation):
         OFDM_symbol = data[approxLocation + i:approxLocation+i+N+CP]
@@ -191,7 +227,7 @@ def findLocationWithPilot(approxLocation, data, rangeOfLocation = 4, pilotValue 
         if absSlope < minValue:
             minValue = absSlope
             bestLocation = i+approxLocation
-            print(minValue)
+            #print(minValue)
     return bestLocation, minValue
 
 bestLocation, minValue = findLocationWithPilot(10000, OFDM_RX)
@@ -200,9 +236,11 @@ plt.show()
 print(bestLocation)
 
 def removeZeros(position,data):
+    """Removes preappended zeros from data"""
     return data[position:]
 
 OFDM_RX = removeZeros(bestLocation, OFDM_RX)
+
 #plt.figure(figsize=(8,2))
 #plt.plot(abs(OFDM_TX), label='TX signal')
 #plt.plot(abs(OFDM_RX), label='RX signal')
@@ -212,34 +250,15 @@ OFDM_RX = removeZeros(bestLocation, OFDM_RX)
 #plt.show()
 #print(len(OFDM_RX))
 
-###NEED TO GET TO WORK###
-def channelEstimate(OFDM_demod):
-    pilots_pos = OFDM_demod[pilotCarriers]  # extract the pilot values from the RX signal
-    pilots_neg = OFDM_demod[-pilotCarriers]
-    Hest_at_pilots1 = pilots_pos / pilotValue # divide by the transmitted pilot values
-    Hest_at_pilots2 = pilots_neg / np.conj(pilotValue)
-    
-    Hest_at_pilots = np.append(Hest_at_pilots1, Hest_at_pilots2)
-    # Perform interpolation between the pilot carriers to get an estimate
-    # of the channel in the data carriers. Here, we interpolate absolute value and phase 
-    # separately
-    Hest_abs = scipy.interpolate.interp1d(np.append(pilotCarriers, N-pilotCarriers), abs(Hest_at_pilots), kind='linear', fill_value="extrapolate")(np.arange(N))
-    Hest_phase = scipy.interpolate.interp1d(np.append(pilotCarriers, N-pilotCarriers), np.angle(Hest_at_pilots), kind='linear', fill_value="extrapolate")(np.arange(N))
-    Hest = Hest_abs * np.exp(1j*Hest_phase)
-    
-    #plt.stem(np.append(pilotCarriers, N-pilotCarriers), abs(Hest_at_pilots), label='Pilot estimates')
-    #plt.plot(np.arange(N), abs(Hest), label='Estimated channel via interpolation')
-    #plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
-    #plt.ylim(0,2)
-    #plt.show()
-    return Hest
 
+####CHIRP STUFF####
 chirp_filtered = channel(exponentialChirp, channelResponse)
 
 #Add some zeros in front to test synchronisation
 chirp_filtered = np.append(np.zeros(10000), chirp_filtered)
 
 def chirp_estimator_test(audio, samples=30, f1=60.0, f2=6000.0, T=5, fs=44100, actualH = H):
+    """Tries to estimate impulse response and perform gross synchronization using a chirp"""
     x = exponential_chirp(T)
     x_r = x[::-1]
 
@@ -296,12 +315,13 @@ def chirp_estimator_test(audio, samples=30, f1=60.0, f2=6000.0, T=5, fs=44100, a
     return h, H2, position
 
 h2, H2, position = chirp_estimator_test(chirp_filtered)
-
-print(position)
+#print(position)
+####END OF CHIRP STUFF####
 
 OFDM_todemap = mapToDecode(OFDM_RX, H)
 
 def Demapping(QPSK):
+    """Demaps from demodulated constellation to original bit sequence"""
     # array of possible constellation points
     constellation = np.array([x for x in demapping_table.keys()])
     
@@ -319,22 +339,35 @@ def Demapping(QPSK):
     return np.vstack([demapping_table[C] for C in hardDecision]), hardDecision
 
 outputdata1, hardDecision = Demapping(OFDM_todemap)
-for qpsk, hard in zip(OFDM_todemap[0:500], hardDecision[0:500]):
-    plt.plot([qpsk.real, hard.real], [qpsk.imag, hard.imag], 'b-o');
-    plt.plot(hardDecision[0:500].real, hardDecision[0:500].imag, 'ro')
-plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Hard Decision demapping');
-plt.show()
+#for qpsk, hard in zip(OFDM_todemap[0:400], hardDecision[0:400]):
+#    plt.plot([qpsk.real, hard.real], [qpsk.imag, hard.imag], 'b-o');
+#    #plt.plot(hardDecision[0:400].real, hardDecision[0:400].imag, 'ro')
+#plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Democulated Constellation');
+#plt.show()
 
 data1tocsv = outputdata1.ravel()
-str1 = ''.join(str(e) for e in data1tocsv)
+demodulatedOutput = ''.join(str(e) for e in data1tocsv)
 
 def text_from_bits(bits, encoding='utf-8', errors='ignore'):
+    """Convert byte sequence to text"""
     n = int(bits, 2)
     return int2bytes(n).decode(encoding, errors)
 
 def int2bytes(i):
+    """Converts bit stream to bytes"""
     hex_string = '%x' % i
     n = len(hex_string)
     return binascii.unhexlify(hex_string.zfill(n + (n & 1)))
 
-print(text_from_bits(str1))
+def calculateBER(ba, audioOutput):
+    """Calculates bit error rate"""
+    errorCount = 0
+    for i in range(len(ba)):
+        if ba[i] != audioOutput[i]:
+            errorCount += 1
+    return errorCount / len(ba)
+
+print(calculateBER(ba, data1tocsv))
+
+print(text_from_bits(demodulatedOutput))
+
