@@ -15,10 +15,10 @@ import bitarray
 from numpy.random import default_rng
 
 
-N = 8192 # DFT size
+N = 4096# DFT size
 K = N//2 # number of OFDM subcarriers with information
 CP = K//4  # length of the cyclic prefix
-P = K//16# number of pilot carriers per OFDM block
+P = K//12# number of pilot carriers per OFDM block
 pilotValue = 1+1j # The known value each pilot transmits
 
 #Define the payload and pilot carriers
@@ -119,7 +119,7 @@ def mapToTransmit(bits_SP):
 
 #####KNOWN OFDM SYMBOLS GENERATION####    
 seedStart = 2000
-def knownOFDMBlock(blocknum = 10, randomSeedStart = seedStart, K = K):
+def knownOFDMBlock(blocknum = 30, randomSeedStart = seedStart, K = K):
     knownOFDMBlock = []
     for i in range(blocknum):
         rng = default_rng(randomSeedStart + i)
@@ -140,7 +140,7 @@ sound = mapToTransmit(bits_SP)
 #print(len(sound))
 
 ####Combine chirp, known OFDM symbols, and OFDM data blocks to get total sound to transmit
-toSendOverActualChannel = np.concatenate((np.zeros(44100),exponentialChirp.ravel(), knownOFDMBlock, sound))
+toSendOverActualChannel = np.concatenate((np.zeros(44100),exponentialChirp.ravel(), knownOFDMBlock, sound, np.zeros(44100)))
 
 plt.plot(toSendOverActualChannel)
 plt.show()
@@ -198,7 +198,7 @@ def channelEstimateKnownOFDM(knownOFDMBlock, randomSeedStart = seedStart, N = N,
     
     plt.figure(1)
     plt.plot(np.arange(N), H, label = 'actual H')
-    plt.plot(np.arange(N), abs(Hest_at_symbols), label='Estimated H via cubic interpolation')
+    plt.plot(np.arange(N), abs(Hest_at_symbols), label='Estimated H via known OFDM')
     plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
     plt.figure(2)
     plt.plot(impulse[0:30], label = 'measured impulse')
@@ -246,8 +246,8 @@ def mapToDecode(audio, channelH):
         data = audio[i*(N+CP): (N+CP)*(i+1)]
         data = removeCP(data, CP)
         data = DFT(data)
-        Hest = channelEstimate(data)
-        #Hest = channelH
+        #Hest = channelEstimate(data)
+        Hest = channelH
         data_equalized = data/Hest
         dataArrayEqualized.append(data_equalized[1:K][dataCarriers-1])
     return np.array(dataArrayEqualized).ravel()
@@ -437,11 +437,11 @@ def Demapping(QPSK):
     return np.vstack([demapping_table[C] for C in hardDecision]), hardDecision
 
 outputdata1, hardDecision = Demapping(OFDM_todemap)
-for qpsk, hard in zip(OFDM_todemap[0:400], hardDecision[0:400]):
-    plt.plot([qpsk.real, hard.real], [qpsk.imag, hard.imag], 'b-o');
-    #plt.plot(hardDecision[0:400].real, hardDecision[0:400].imag, 'ro')
-plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Demodulated Constellation');
-plt.show()
+#for qpsk, hard in zip(OFDM_todemap[0:400], hardDecision[0:400]):
+#    plt.plot([qpsk.real, hard.real], [qpsk.imag, hard.imag], 'b-o');
+#    #plt.plot(hardDecision[0:400].real, hardDecision[0:400].imag, 'ro')
+#plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Demodulated Constellation');
+#plt.show()
 
 data1tocsv = outputdata1.ravel()
 demodulatedOutput = ''.join(str(e) for e in data1tocsv)

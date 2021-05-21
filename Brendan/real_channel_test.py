@@ -23,12 +23,12 @@ def audioDataFromFile(filename):
     return data
 
 outputData = audioDataFromFile('sound_to_transmit.wav')
-receivedData = audioDataFromFile('received_sound.wav')
+receivedData = audioDataFromFile('received_sound_from_laptop.wav')
 
 ###OFDM CONFIGS###
 fs = 44100
-N = 1024 # DFT size
-K = 512 # number of OFDM subcarriers with information
+N = 4096 # DFT size
+K = N//2 # number of OFDM subcarriers with information
 CP = K//4  # length of the cyclic prefix
 P = K//16# number of pilot carriers per OFDM block
 pilotValue = 1+1j # The known value each pilot transmits
@@ -43,7 +43,7 @@ dataCarriers = np.delete(dataCarriers, 0)
 
 #Define known OFDM symbols configs
 seedStart = 2000
-numBlocks = 10
+numBlocks = 20
 
 #QPSK
 mu = 2 # bits per symbol 
@@ -101,6 +101,18 @@ def chirp_synchroniser(audio, f1=60.0, f2=6000.0, T=chirpLength, fs=44100):
     #plt.show()
     return position-T*fs
 
+def chirp_synchroniserv2(audio, T=chirpLength, f1=60.0, f2=6000.0, fs=44100):
+    """Tries to estimate impulse response and perform gross synchronization using a chirp"""
+    x = exponential_chirp(T)
+    x_r = x[::-1]
+    # Format and normalise
+    y = audio
+    # Convolve output with x_r
+    h = signal.fftconvolve(x_r, y)
+    # Estimate Impulse Response start point
+    position = np.where(h == np.amax(h))[0][0]
+    return position-T*fs
+
 position = chirp_synchroniser(receivedData)
 print(position)
 
@@ -115,6 +127,8 @@ print(position)
 
 syncData = receivedData[position + chirpLength*fs:]
 
+plt.plot(syncData)
+plt.show()
 ###FUNCTIONS REQUIRED FOR DEMODULATION###
 def removeCP(signal, a):
     """Removes cyclic prefix"""
@@ -124,23 +138,10 @@ def DFT(OFDM_RX):
     """Takes DFT"""
     return np.fft.fft(OFDM_RX, N)
 
-def mapToDecode(audio, channelH):
-    """Builds demodulated constellation symbol from OFDM symbols"""
-    dataArrayEqualized = []
-    for i in range(len(audio)//N+CP):
-        data = audio[i*(N+CP): (N+CP)*(i+1)]
-        data = removeCP(data, CP)
-        data = DFT(data)
-        #Hest = channelEstimate(data)
-        Hest = channelH
-        data_equalized = data/Hest
-        dataArrayEqualized.append(data_equalized[1:512][dataCarriers-1])
-    return np.array(dataArrayEqualized).ravel()
-
 ###CHANNEL ESTIMATION USING KNOWN OFDM SYMBOLS###
 def channelEstimateKnownOFDM(knownOFDMBlock, numberOfBlocks = numBlocks, randomSeedStart = seedStart, N = N, CP = CP):
     Hest_at_symbols = np.zeros(N,dtype=complex)
-
+    
     for i in range(numberOfBlocks):
         rng = default_rng(randomSeedStart + i)
         bits = rng.binomial(n=1, p=0.5, size=((K-1)*2))
@@ -151,23 +152,24 @@ def channelEstimateKnownOFDM(knownOFDMBlock, numberOfBlocks = numBlocks, randomS
         receivedSymbols = knownOFDMBlock[i*(N+CP):(i+1)*(N+CP)]
         receivedSymbols = removeCP(receivedSymbols, CP)
         receivedSymbols = DFT(receivedSymbols)
-            
+
+
         for j in range(N):
             if j == N//2 or j == 0:
                 Hest_at_symbols[j] == 0
             else:
                 div = (receivedSymbols[j]/expectedSymbols[j] )
                 Hest_at_symbols[j] = (Hest_at_symbols[j] * i + div) / (i + 1) #Average over past OFDM blocks
-                    
+
+
     impulse = np.fft.ifft(Hest_at_symbols)
-    Hest_at_symbols = (Hest_at_symbols * i + receivedSymbols / expectedSymbols) / (i+1) #Averaging over past OFDM blocks
 
     plt.figure(1)
-    plt.plot(np.arange(N), np.log(abs(Hest_at_symbols)), label='Estimated H via cubic interpolation')
+    plt.plot(np.arange(N), abs(Hest_at_symbols), label='Estimated H ')
     plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
-    plt.figure(2)
-    plt.plot(impulse, label = 'impulse response')
-    plt.grid(True); plt.xlabel('samples'); plt.ylabel('h(t)'); plt.legend(fontsize=10)
+    #plt.figure(2)
+    #plt.plot(impulse, label = 'impulse response')
+    #plt.grid(True); plt.xlabel('samples'); plt.ylabel('h(t)'); plt.legend(fontsize=10)
     plt.show()
 
     return Hest_at_symbols, impulse
@@ -236,6 +238,7 @@ def mapToDecode(audio, channelH):
         #Hest = channelEstimate(data)
         Hest = channelH
         data_equalized = data/Hest
+        #data_equalized = data
         dataArrayEqualized.append(data_equalized[1:K][dataCarriers-1])
     return np.array(dataArrayEqualized).ravel()
 
@@ -260,9 +263,13 @@ def Demapping(QPSK):
     return np.vstack([demapping_table[C] for C in hardDecision]), hardDecision
 
 outputdata1, hardDecision = Demapping(OFDM_todemap)
-for qpsk, hard in zip(OFDM_todemap[0:400], hardDecision[0:400]):
-    plt.plot([qpsk.real], [qpsk.imag], 'b-o');
-    plt.plot(hardDecision[0:400].real, hardDecision[0:400].imag, 'ro')
+range_to_plot = [0, N//2-1]
+z = np.arange(range_to_plot[1]-range_to_plot[0])
+plt.scatter(OFDM_todemap[range_to_plot[0]:range_to_plot[1]].real, OFDM_todemap[range_to_plot[0]:range_to_plot[1]].imag, c = z, cmap = "bwr");
+
+#for qpsk, hard in zip(OFDM_todemap[0:100], hardDecision[0:100]):
+    #plt.plot([qpsk.real, hard.real], [qpsk.imag, hard.imag], 'b-o');
+#    plt.plot(hardDecision[0:400].real, hardDecision[0:400].imag, 'ro')
 plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Demodulated Constellation');
 plt.show()
 
@@ -292,11 +299,11 @@ print(calculateBER(ba, data1tocsv))
 
 print(text_from_bits(demodulatedOutput))
 
-"""
+'''
 minError = 1
-for i in range(-400, 400):
+for i in range(-4000, 4000):
    syncData = receivedData[position + chirpLength*fs+i:]
-   #Hest = channelEstimateKnownOFDM(syncData[:numBlocks*(N+CP)])
+   Hest = channelEstimateKnownOFDM(syncData)[0]
    OFDM_todemap = mapToDecode(syncData[numBlocks*(N+CP):], Hest)[:len(ba)//2]
    outputdata1, hardDecision = Demapping(OFDM_todemap)
    data1tocsv = outputdata1.ravel()
@@ -312,7 +319,7 @@ for i in range(-400, 400):
 print(minError, minErrorLocation)
 
 syncData = receivedData[position + chirpLength*fs+minErrorLocation:]
-Hest = channelEstimateKnownOFDM(syncData[:numBlocks*(N+CP)])
+Hest = channelEstimateKnownOFDM(syncData)[0]
 OFDM_todemap = mapToDecode(syncData[numBlocks*(N+CP):], Hest)[:len(ba)//2]
 outputdata1, hardDecision = Demapping(OFDM_todemap)
 
@@ -324,5 +331,5 @@ plt.show()
 
 data1tocsv = outputdata1.ravel()
 demodulatedOutput = ''.join(str(e) for e in data1tocsv)
-print(calculateBER(ba, data1tocsv))"""
+print(calculateBER(ba, data1tocsv))'''
 
