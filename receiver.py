@@ -41,8 +41,14 @@ def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N
         receivedSymbols = removeCP(receivedSymbols, CP, N)
         receivedSymbols = DFT(receivedSymbols, N)
 
-        hestAtSymbols = (hestAtSymbols * i + (receivedSymbols / expectedSymbols)) / (i + 1) # Averaging over past OFDM blocks
-
+        # hestAtSymbols = (hestAtSymbols * i + (receivedSymbols / expectedSymbols)) / (i + 1) # Averaging over past OFDM blocks
+        for j in range(N):
+            if j == N//2 or j == 0:
+                hestAtSymbols[j] == 0
+            else:
+                div = (receivedSymbols[j]/expectedSymbols[j] )
+                hestAtSymbols[j] = (hestAtSymbols[j] * i + div) / (i + 1) #Average over past OFDM blocks
+    
     return hestAtSymbols
 
 # Channel estimation using known pilot symbols
