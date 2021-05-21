@@ -1,3 +1,6 @@
+import bitarray
+import binascii
+
 # convert a string into binary using utf-8 encoding
 def toBinary(string):
     # Text to Binary
@@ -29,3 +32,22 @@ def str_to_bytearray(string_data):
         int_data.append(int(i, 2))
 
     return bytearray(int_data)
+
+def text_from_bits(bits, encoding='utf-8', errors='ignore'):
+    """Convert byte sequence to text"""
+    n = int(bits, 2)
+    return int2bytes(n).decode(encoding, errors)
+
+def int2bytes(i):
+    """Converts bit stream to bytes"""
+    hex_string = '%x' % i
+    n = len(hex_string)
+    return binascii.unhexlify(hex_string.zfill(n + (n & 1)))
+
+def calculateBER(ba, audioOutput):
+    """Calculates bit error rate"""
+    errorCount = 0
+    for i in range(len(ba)):
+        if ba[i] != audioOutput[i]:
+            errorCount += 1
+    return errorCount / len(ba)

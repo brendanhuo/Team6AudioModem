@@ -7,87 +7,72 @@ import sounddevice as sd
 import soundfile as sf
 import math, cmath
 from scipy.io.wavfile import write
+from numpy.random import default_rng
 
-# QPSK Transmitter
-class Transmitter:
-    def __init__(self, bits_data, N, L, encoding_instructions, max_freq_index=0):
-        self.N = N # dft size
-        self.L = L # cyclic prefix length
-        self.bits_data = bits_data # bits data to be transmitted
-        self.mu = 2 # bits per symbol
-        self.max_freq_index = max_freq_index
-        self.encoding_instructions = encoding_instructions # TODO: may have different encoding of data depending on what it is
+""" Define the data carriers and pilot tone carriers
+# N - the DFT size
+# K - number of OFDM subcarriers with information
+# P - number of pilot tones per OFDM block """
+def assign_data_pilot(K, P):
+    allCarriers = np.arange(K)
+    pilotCarriers = allCarriers[1::K//P]
+    dataCarriers = np.delete(allCarriers, pilotCarriers)
+    dataCarriers = np.delete(dataCarriers, 0)
+    return dataCarriers, pilotCarriers
+
+""" Maps each batch of bits to a constellation symbol"""
+def mapping(bits):
+    mapping_table = {
+        (0,0) : 1+1j,
+        (0,1) : -1+1j,
+        (1,0) : 1-1j,
+        (1,1) : -1-1j
+    }
+    demapping_table = {v : k for k, v in mapping_table.items()}
+    return np.array([mapping_table[tuple(b)] for b in bits])
+
+"""Assigns pilot values and payload values to OFDM symbol, take reverse complex conjugate and append to end to make signal passband"""
+def ofdm_symbol(K, pilotValue, pilotCarriers, dataCarriers, qpskPayload):
+    symbol = np.zeros(K, dtype=complex) # the overall K subcarriers
+    symbol[pilotCarriers] = pilotValue  # allocate the pilot subcarriers 
+    symbol[dataCarriers] = qpskPayload  # allocate the data subcarriers
+    symbol = np.append(symbol, np.append(0, np.conj(symbol)[:0:-1]))
+    return symbol
+
+"""Take IDFT"""
+def idft(ofdmData):
+    return np.fft.ifft(ofdmData)
+
+"""Adds cyclic prefix"""
+def add_cp(CP, ofdmTime):
+    cp = ofdmTime[-CP:]               # take the last CP samples ...
+    return np.hstack([cp, ofdmTime])  # ... and add them to the beginning
+
+"""Create full sequence to transmit through speakers"""
+def map_to_transmit(K, CP, pilotValue, pilotCarriers, dataCarriers, bitsSP):
+    soundArray = []
+    for section in bitsSP:
+        qpsk = mapping(section)
+        ofdmData = ofdm_symbol(K, pilotValue, pilotCarriers, dataCarriers, qpsk)
+        ofdmTime = idft(ofdmData)
+        ofdmWithCP = add_cp(CP, ofdmTime)
+        soundArray.append(ofdmWithCP.real)
+    return np.array(soundArray).ravel()
+
+"""Known OFDM block generation for channel estimation"""
+def known_ofdm_block(blocknum, randomSeedStart, mu, K, CP, mappingTable):
+    knownOFDMBlock = []
+    for i in range(blocknum):
+        rng = default_rng(randomSeedStart + i)
+        bits = rng.binomial(n=1, p=0.5, size=((K-1)*2))
+        bitsSP = bits.reshape(len(bits)//mu, mu)
+
+        symbol = np.array([mappingTable[tuple(b)] for b in bitsSP])
+        ofdmSymbols = np.append(np.append(0, symbol), np.append(0,np.conj(symbol)[::-1]))
+
+        ofdmTime = idft(ofdmSymbols)
+        ofdmWithCP = add_cp(CP, ofdmTime)
+        knownOFDMBlock.append(ofdmWithCP.real)
         
-        self.symbols = []
-    
-    # convert bits_data to QPSK symbols
-    def qpsk(self):
-        assert(len(self.bits_data)%self.mu==0)
-        self.symbols = []
-
-        for i in range(int(len(self.bits_data) / self.mu)):
-            real = 1 / math.sqrt(2)
-            imaginary = 1 / math.sqrt(2) * 1j
-
-            index = i*2
-            if self.bits_data[index] == '1':
-                imaginary *= -1
-            
-            if self.bits_data[index+1] == '0':
-                real *= -1
-            
-            self.symbols.append(real + imaginary)
-        
-        self.symbols = np.asarray(self.symbols)
-    
-    def ofdm(self):
-        # Frequency bins that actually contain information, other half is mirrored
-        info_block_len = int(self.N/2 - 1)
-
-        if self.max_freq_index != 0:
-            max_limit = min(self.max_freq_index, info_block_len)
-        else:
-            max_limit = info_block_len
-        
-        ofdm_time = []
-        ofdm_freq = []
-
-        index = 0
-
-        while index < len(self.symbols):
-
-            # Symbols in one DFT block of length N - info_block is the DFT block
-            info_block = []
-            for i in range(max_limit):
-                try:
-                    info_block.append(self.symbols[index])
-                except:
-                    break
-                index += 1
-            
-            # Ensure that the information block length is N/2 - 1
-            info_padding = info_block_len - len(info_block)
-            
-            for i in range(info_padding):
-                info_block.append(cmath.rect(0.2, 0))
-            
-            info_block = np.array(info_block)
-
-            # Add the complex conjugates and zero in the beginning and middle to form a OFDM symbol sequence to ensure a real time series
-            ofdm_symbol_block = np.concatenate(([0], info_block, [0], info_block[::-1].conjugate()))
-
-            # time domain signal is the iFFT
-            time_series_block = np.fft.ifft(ofdm_symbol_block)
-
-            # add cyclic prefix
-            if self.L == 0:
-                ofdm_time_block = time_series_block
-            else:
-                ofdm_time_block = np.concatenate((time_series_block[-self.L:], time_series_block))
-            
-            ofdm_time.append(ofdm_time_block)
-            ofdm_freq.append(ofdm_symbol_block)
-        
-        return np.asarray(ofdm_time), np.asarray(ofdm_freq)
-
+    return np.array(knownOFDMBlock).ravel()
 

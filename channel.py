@@ -8,24 +8,14 @@ import soundfile as sf
 import math, cmath
 from scipy.io.wavfile import write
 
-# AWGN channel
-class Channel:
-    def __init__(self, channel_impulse_response, noise_snr):
-        self.channel_impulse_response
-        self.noise_snr = noise_snr
-    
-    def convolve_channel(self, data_transmitted):
-        channel_response = []
-        for block in data_transmitted:
-            channel_response_block = np.convolve(block, self.channel_impulse_response)
-            signal_power = np.mean(abs(channel_response_block**2))
-            sigma_squared = signal_power * (10 **(-self.noise_snr / 10)) # noise variance
-    
-            # Generate complex noise with given variance
-            noise = np.sqrt(sigma_squared / 2) * (np.random.randn(*channel_response_block.shape)+1j*np.random.randn(*channel_response_block.shape))
 
-            channel_response.append(channel_response_block + noise)
-        
-        return channel_response
-
+def channel(signal, channelResponse, snrDB=25):
+    """Creates a simulated channel with given channel impulse response and white Gaussian noise"""
+    convolved = np.convolve(signal, channelResponse)
+    signal_power = np.mean(abs(convolved**2))
+    sigma2 = signal_power * 10**(-snrDB/10)  # calculate noise power based on signal power and SNR
+    
+    # Generate complex noise with given variance
+    noise = np.sqrt(sigma2/2) * (np.random.randn(*convolved.shape)+1j*np.random.randn(*convolved.shape))
+    return convolved + noise
 
