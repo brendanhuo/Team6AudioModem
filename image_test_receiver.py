@@ -29,7 +29,7 @@ receivedSound = np.load("audio/img_sound1.npy")
 plt.plot(receivedSound)
 plt.show()
 
-positionChirpStart = chirp_synchroniser(receivedSound, chirpLength)
+positionChirpStart = chirp_synchroniser(receivedSound, exponential_chirp, chirpLength)
 
 # OFDM block channel estimation
 ofdmBlockStart = positionChirpStart + chirpLength * fs
