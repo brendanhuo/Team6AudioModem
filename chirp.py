@@ -1,5 +1,7 @@
 import math
 import numpy as np
+from graphing_utils import *
+
 
 def exponential_chirp(T, f1=60.0, f2=6000.0, window_strength=10.0, fs=44100):
     """Produces chirp and returns impulse characteristics"""
@@ -17,6 +19,25 @@ def exponential_chirp(T, f1=60.0, f2=6000.0, window_strength=10.0, fs=44100):
     profile = np.array(profile)
 
     return profile
+
+
+def exponential_chirp_chain(T=1, f1=60.0, f2=6000.0, window_strength=50.0, fs=44100, number_chirps=3, time_between=1):
+    """Produces chirp and returns impulse characteristics"""
+
+    x = exponential_chirp(T, f1, f2, window_strength, fs)
+
+    x_chain = []
+
+    for i in range(round((len(x) + fs * time_between) * number_chirps)):
+        if i % round((len(x) + time_between * fs)) < len(x):
+            x_chain.append(x[i % round((len(x) + time_between * fs))])
+        else:
+            x_chain.append(0.0)
+
+    x_chain = np.array(x_chain)
+
+    return x_chain
+
 
 def exponential_chirp_rev(T, f1=6000.0, f2=60.0, window_strength=10.0, fs=44100):
     """Produces chirp and returns impulse characteristics"""
@@ -53,6 +74,7 @@ def exponential_chirp_no_window(T, f1=60.0, f2=6000.0, fs=44100):
 
     return profile
 
+
 def exponential_chirp_no_window_rev(T, f1=6000.0, f2=60.0, fs=44100):
     """Produces chirp and returns impulse characteristics"""
 
@@ -70,6 +92,7 @@ def exponential_chirp_no_window_rev(T, f1=6000.0, f2=60.0, fs=44100):
 
     return profile
 
+
 def linear_chirp(T, f1=60.0, f2=6000.0, window_strength=10.0, fs=44100):
     t_list = np.linspace(0, T, int(round(T * fs)), False)
     profile = []
@@ -83,6 +106,7 @@ def linear_chirp(T, f1=60.0, f2=6000.0, window_strength=10.0, fs=44100):
     profile = np.array(profile)
 
     return profile
+
 
 def linear_chirp_no_window(T, f1=60.0, f2=6000.0, fs=44100):
     t_list = np.linspace(0, T, int(round(T * fs)), False)
