@@ -3,6 +3,7 @@ import pyaudio
 import sounddevice as sd
 import soundfile as sf
 from scipy.io.wavfile import write
+import numpy as np
 
 fs = 44100
 

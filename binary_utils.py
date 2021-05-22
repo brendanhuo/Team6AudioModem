@@ -47,7 +47,7 @@ def int2bytes(i):
 def calculateBER(ba, audioOutput):
     """Calculates bit error rate"""
     errorCount = 0
-    for i in range(len(ba)):
+    for i in range(len(audioOutput)):
         if ba[i] != audioOutput[i]:
             errorCount += 1
     return errorCount / len(ba)

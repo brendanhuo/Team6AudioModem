@@ -70,14 +70,18 @@ def channel_estimate_pilot(ofdmReceived, pilotCarriers, pilotValue, N):
     return hest
 
 """Builds demodulated constellation symbol from OFDM symbols"""
-def map_to_decode(audio, channelH, N, K, CP, dataCarriers):
+def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance = 0.2, pilotValues = False):
     dataArrayEqualized = []
+    Hest = channelH
     for i in range(len(audio)//(N+CP)):
         data = audio[i*(N+CP): (N+CP)*(i+1)]
         data = removeCP(data, CP, N)
         data = DFT(data, N)
+
+        if pilotValues:
+            pilotHest = channel_estimate_pilot(data, pilotCarriers, pilotValue, N)
         # Hest = channelEstimate(data)
-        Hest = channelH
+        Hest = (1-pilotImportance)* Hest + pilotImportance*pilotHest
         data_equalized = data/Hest
         dataArrayEqualized.append(data_equalized[1:K][dataCarriers-1])
     return np.array(dataArrayEqualized).ravel()
@@ -92,7 +96,7 @@ def find_location_with_pilot(approxLocation, data, rangeOfLocation, pilotValue, 
         angleValues = np.angle(ofdmTime[pilotCarriers]/pilotValue)
         # plt.plot(pilotCarriers, angle_values, label = i)
         
-        absSlope = abs(np.polyfit(pilotCarriers,angle_values,1)[0])
+        absSlope = abs(np.polyfit(pilotCarriers,angleValues,1)[0])
         if absSlope < minValue:
             minValue = absSlope
             bestLocation = i + approxLocation
