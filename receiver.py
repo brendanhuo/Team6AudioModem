@@ -86,7 +86,7 @@ def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotV
         dataArrayEqualized.append(data_equalized[1:K][dataCarriers-1])
     return np.array(dataArrayEqualized).ravel()
 
-"""Performs fine synchronization using pilot symbols"""
+"""Performs fine synchronization using pilot symbols (NOT USED)"""
 def find_location_with_pilot(approxLocation, data, rangeOfLocation, pilotValue, pilotCarriers, N, CP):
     minValue = 100000
     for i in range(-rangeOfLocation+1, rangeOfLocation):
@@ -103,9 +103,10 @@ def find_location_with_pilot(approxLocation, data, rangeOfLocation, pilotValue, 
             #print(minValue)
     return bestLocation, minValue
 
-def chirp_synchroniser(audio, T, f1=60.0, f2=6000.0, fs=44100):
+def chirp_synchroniser(audio, chirp_function, T, f1=60.0, f2=6000.0, fs=44100):
     """Tries to estimate impulse response and perform gross synchronization using a chirp"""
-    x = exponential_chirp(T)
+    # chirp_function is the chirp function specified to match filter with
+    x = chirp_function(T)
     x_r = x[::-1]
 
     # Format and normalise

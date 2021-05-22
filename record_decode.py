@@ -5,20 +5,6 @@ from receiver import *
 from chirp import *
 from channel import * 
 
-# # Comment out if not recording
-# print('Recording')
-
-# listening_time = 7
-# r = sd.rec(int(listening_time * fs), samplerate=fs, channels=1)
-# sd.wait()  # Wait until recording is finished
-# write('audio/sound4.wav', fs, r)  # Save as WAV file
-
-# audio_received = []
-# for i in range(len(r)):
-#     audio_received.append(r[i][0])
-
-# np.save("audio/sound4.npy", np.asarray(audio_received))
-
 with open("./text/lorem.txt") as f:
     contents = f.read()
 
@@ -33,7 +19,7 @@ receivedSound = np.load("audio/sound1.npy")
 plt.plot(receivedSound)
 plt.show()
 
-positionChirpStart = chirp_synchroniser(receivedSound, chirpLength)
+positionChirpStart = chirp_synchroniser(receivedSound, exponential_chirp, chirpLength)
 
 # OFDM block channel estimation
 ofdmBlockStart = positionChirpStart + chirpLength * fs
@@ -48,6 +34,8 @@ plt.show()
 hestImpulse = np.fft.ifft(hest)[0:N//2]
 plt.plot(np.arange(300), hestImpulse[0:300])
 plt.title('Impulse response')
+plt.xlabel("Sample number")
+plt.ylabel("Impulse response magnitude")
 plt.show()
 
 equalizedSymbols = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance = 0.49, pilotValues = True)

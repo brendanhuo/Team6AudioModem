@@ -8,7 +8,6 @@ import soundfile as sf
 import math, cmath
 from scipy.io.wavfile import write
 
-
 def channel(signal, channelResponse, snrDB=25):
     """Creates a simulated channel with given channel impulse response and white Gaussian noise"""
     convolved = np.convolve(signal, channelResponse)
