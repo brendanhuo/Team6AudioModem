@@ -1,5 +1,7 @@
 import bitarray
 import binascii
+import matplotlib.pyplot as plt
+import numpy as np
 
 # convert a string into binary using utf-8 encoding
 def toBinary(string):
@@ -51,3 +53,23 @@ def calculateBER(ba, audioOutput):
         if ba[i] != audioOutput[i]:
             errorCount += 1
     return errorCount / len(ba)
+
+def image2bits(image_path, plot = False):
+    img = plt.imread(image_path).ravel()
+    
+    if plot:
+        plt.imshow(img.reshape(489, 725, 4))
+        plt.title("Sent image")
+        plt.show()
+        
+    bit_count = 8
+    bits = []
+    for value in img:
+        bits.append(f'{value:0{bit_count}b}')
+
+    bits = str(''.join(str(e) for e in bits))
+    ba = []
+    for bit in bits:
+        ba.append(int(bit))
+    ba = np.array(ba)
+    return ba

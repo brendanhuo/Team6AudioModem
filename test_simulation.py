@@ -35,9 +35,10 @@ knownOFDMBlock = known_ofdm_block(blockNum, seedStart, mu, K, CP, mappingTable)
 dataTotal = np.concatenate((np.zeros(44100), exponentialChirp.ravel(), knownOFDMBlock, sound))
 
 plt.plot(dataTotal)
+plt.title("Signal to send")
 plt.show()
 
-# wavf.write("audio/test_sound_two.wav", fs, dataTotal)
+#write("audio/test_sound_two.wav", fs, dataTotal)
 
 ### CHANNEL ###
 
@@ -69,7 +70,7 @@ ofdmBlockEnd = positionChirpStart + chirpLength * fs + (N + CP) * blockNum
 
 hest = channel_estimate_known_ofdm(ofdmReceived[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
 plt.plot(np.arange(N), HChannel, label = 'actual H')
-plt.plot(np.arange(N), abs(hest), label='Estimated H via cubic interpolation')
+plt.plot(np.arange(N), abs(hest), label='Estimated H')
 plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
 plt.show()
 
