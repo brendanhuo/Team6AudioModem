@@ -4,7 +4,7 @@ from graphing_utils import *
 
 
 def exponential_chirp(T, f1=60.0, f2=6000.0, window_strength=10.0, fs=44100):
-    """Produces chirp and returns impulse characteristics"""
+    """Produces exponential chirp with exponential envelope"""
 
     t_list = np.linspace(0, T, int(round(T * fs)), False)
     profile = []
@@ -22,7 +22,7 @@ def exponential_chirp(T, f1=60.0, f2=6000.0, window_strength=10.0, fs=44100):
 
 
 def exponential_chirp_chain(T=1, f1=60.0, f2=6000.0, window_strength=50.0, fs=44100, number_chirps=3, time_between=1):
-    """Produces chirp and returns impulse characteristics"""
+    """Produces exponential chirp chain with exponential envelope"""
 
     x = exponential_chirp(T, f1, f2, window_strength, fs)
 
@@ -40,7 +40,7 @@ def exponential_chirp_chain(T=1, f1=60.0, f2=6000.0, window_strength=50.0, fs=44
 
 
 def exponential_chirp_rev(T, f1=6000.0, f2=60.0, window_strength=10.0, fs=44100):
-    """Produces chirp and returns impulse characteristics"""
+    """Produces exponential chirp with exponential envelope reversed"""
 
     t_list = np.linspace(0, T, int(round(T * fs)), False)
     profile = []
@@ -53,12 +53,13 @@ def exponential_chirp_rev(T, f1=6000.0, f2=60.0, window_strength=10.0, fs=44100)
 
     # Format
     profile = np.array(profile)
+    profile = profile[::-1]
 
     return profile
 
 
 def exponential_chirp_no_window(T, f1=60.0, f2=6000.0, fs=44100):
-    """Produces chirp and returns impulse characteristics"""
+    """Produces exponential chirp"""
 
     t_list = np.linspace(0, T, int(round(T * fs)), False)
     profile = []
@@ -76,7 +77,7 @@ def exponential_chirp_no_window(T, f1=60.0, f2=6000.0, fs=44100):
 
 
 def exponential_chirp_no_window_rev(T, f1=6000.0, f2=60.0, fs=44100):
-    """Produces chirp and returns impulse characteristics"""
+    """Produces exponential chirp reversed"""
 
     t_list = np.linspace(0, T, int(round(T * fs)), False)
     profile = []
@@ -89,11 +90,14 @@ def exponential_chirp_no_window_rev(T, f1=6000.0, f2=60.0, fs=44100):
 
     # Format
     profile = np.array(profile)
+    profile = profile[::-1]
 
     return profile
 
 
 def linear_chirp(T, f1=60.0, f2=6000.0, window_strength=10.0, fs=44100):
+    """Produces linear chirp with exponential envelope"""
+
     t_list = np.linspace(0, T, int(round(T * fs)), False)
     profile = []
     r = f2/f1
@@ -109,6 +113,8 @@ def linear_chirp(T, f1=60.0, f2=6000.0, window_strength=10.0, fs=44100):
 
 
 def linear_chirp_no_window(T, f1=60.0, f2=6000.0, fs=44100):
+    """Produces linear chirp"""
+
     t_list = np.linspace(0, T, int(round(T * fs)), False)
     profile = []
     r = f2 / f1
