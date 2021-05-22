@@ -12,20 +12,28 @@ from chirp import *
 from numpy.random import default_rng
 from scipy import signal
 
+
 def removeCP(signal, CP, N):
     """Removes cyclic prefix"""
+
     return signal[CP:(CP+N)]
+
 
 def DFT(ofdmData, N):
     """Takes DFT"""
+
     return np.fft.fft(ofdmData, N)
+
 
 def remove_zeros(position, data):
     """Removes preappended zeros from data"""
+
     return data[position:]
 
-# Channel estimate using known OFDM block symbols
+
 def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N, K, CP, mu):
+    """Channel estimate using known OFDM block symbols"""
+
     numberOfBlocks = len(knownOFDMBlock) // (N+CP)
     hestAtSymbols = np.zeros(N) # estimate of the channel gain at particular frequency bins
 
@@ -51,9 +59,10 @@ def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N
     
     return hestAtSymbols
 
-# Channel estimation using known pilot symbols
+
 def channel_estimate_pilot(ofdmReceived, pilotCarriers, pilotValue, N):
     """Performs channel estimation using pilot values"""
+
     pilotsPos = ofdmReceived[pilotCarriers]  # extract the pilot values from the RX signal
     pilotsNeg = ofdmReceived[-pilotCarriers]
     hestAtPilots1 = pilotsPos / pilotValue # divide by the transmitted pilot values
@@ -69,10 +78,13 @@ def channel_estimate_pilot(ofdmReceived, pilotCarriers, pilotValue, N):
 
     return hest
 
-"""Builds demodulated constellation symbol from OFDM symbols"""
+
 def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance = 0.2, pilotValues = False):
+    """Builds demodulated constellation symbol from OFDM symbols"""
+
     dataArrayEqualized = []
     Hest = channelH
+
     for i in range(len(audio)//(N+CP)):
         data = audio[i*(N+CP): (N+CP)*(i+1)]
         data = removeCP(data, CP, N)
@@ -80,16 +92,22 @@ def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotV
 
         if pilotValues:
             pilotHest = channel_estimate_pilot(data, pilotCarriers, pilotValue, N)
+
         # Hest = channelEstimate(data)
         Hest = (1-pilotImportance)* Hest + pilotImportance*pilotHest
         data_equalized = data/Hest
         dataArrayEqualized.append(data_equalized[1:K][dataCarriers-1])
+
     return np.array(dataArrayEqualized).ravel()
 
-"""Performs fine synchronization using pilot symbols (NOT USED)"""
+
 def find_location_with_pilot(approxLocation, data, rangeOfLocation, pilotValue, pilotCarriers, N, CP):
+    """Performs fine synchronization using pilot symbols (NOT USED)"""
+
     minValue = 100000
+
     for i in range(-rangeOfLocation+1, rangeOfLocation):
+
         ofdmSymbol = data[approxLocation + i: approxLocation+i+N+CP]
         ofdmNoCP = removeCP(ofdmSymbol, CP. N)
         ofdmTime = DFT(ofdmNoCP)
@@ -101,10 +119,13 @@ def find_location_with_pilot(approxLocation, data, rangeOfLocation, pilotValue, 
             minValue = absSlope
             bestLocation = i + approxLocation
             #print(minValue)
+
     return bestLocation, minValue
 
-def chirp_synchroniser(audio, chirp_function, T, f1=60.0, f2=6000.0, fs=44100):
-    """Tries to estimate impulse response and perform gross synchronization using a chirp"""
+
+def chirp_synchroniser(audio, chirp_function, T, f1=60.0, f2=6000.0, fs=44100, number_chirps=1, time_between=0):
+    """Performs synchronization using a chirp, returning the position of the END of the chirp chain signal"""
+
     # chirp_function is the chirp function specified to match filter with
     x = chirp_function(T)
     x_r = x[::-1]
@@ -112,16 +133,75 @@ def chirp_synchroniser(audio, chirp_function, T, f1=60.0, f2=6000.0, fs=44100):
     # Format and normalise
     y = audio
 
-    # Convolve output with x_r
+    # Convolve output with x_r and normalise
     h = signal.fftconvolve(x_r, y)
+    h = h / np.linalg.norm(h)
 
-    # Estimate Impulse Response start point
-    position = np.where(h == np.amax(h))[0][0]
+    if number_chirps == 1:
 
-    return position-T*fs
+        # Estimate start point if one chirp
+        position = np.where(h == np.amax(h))[0][0] + time_between * fs
+
+    else:
+
+        # plot_waveform(h, "Convoluted Signal")
+        h_copy = h
+        positions = []
+
+        # determine chirp chain positions
+        for i in range(number_chirps):
+            if i == 0:
+                positions.append(np.where(h_copy == np.amax(h_copy))[0][0])
+                h_copy = np.delete(h_copy, positions[0])
+            else:
+                while True:
+                    test = np.where(h_copy == np.amax(h_copy))[0][0]
+                    h_copy = np.delete(h_copy, test)
+
+                    j = 0
+                    for item in positions:
+                        if abs(test - item) > time_between * fs * 0.5:
+                            j += 1
+
+                    if j == len(positions):
+                        positions.append(test)
+                        break
+
+        positions.sort()
+        print(positions)
+
+        estimated_positions = []
+
+        # determine average position
+        total = 0
+        for item in positions:
+            total += item
+
+        centre = round(total / len(positions))
+        estimated_positions.append(centre)
+
+        # determine estimated chirp positions (equally spaced)
+        if len(positions) % 2 == 0:
+            for i in range(round(len(positions) / 2)):
+                estimated_positions.append(round(centre + (i + 0.5) * (T + time_between) * fs))
+                estimated_positions.append(round(centre - (i + 0.5) * (T + time_between) * fs))
+        else:
+            for i in range(round((len(positions) - 1) / 2)):
+                estimated_positions.append(round(centre + (i + 1) * (T + time_between) * fs))
+                estimated_positions.append(round(centre - (i + 1) * (T + time_between) * fs))
+
+        estimated_positions.sort()
+        print(estimated_positions)
+
+        # estimated starting position is the last in the list, plus the chirp length and time between chirps
+        position = estimated_positions[-1] + (T + time_between)
+
+    return position
+
 
 def demapping(qpsk, demappingTable):
     """Demaps from demodulated constellation to original bit sequence"""
+
     # array of possible constellation points
     constellation = np.array([x for x in demappingTable.keys()])
     
@@ -137,7 +217,3 @@ def demapping(qpsk, demappingTable):
     
     # transform the constellation point into the bit groups
     return np.vstack([demappingTable[C] for C in hardDecision]), hardDecision
-
-
-
-
