@@ -19,11 +19,11 @@ receivedSound = np.load("audio/sound1.npy")
 plt.plot(receivedSound)
 plt.show()
 
-positionChirpStart = chirp_synchroniser(receivedSound, exponential_chirp, chirpLength)
+positionChirpEnd = chirp_synchroniser(receivedSound, exponential_chirp, chirpLength)
 
 # OFDM block channel estimation
-ofdmBlockStart = positionChirpStart + chirpLength * fs
-ofdmBlockEnd = positionChirpStart + chirpLength * fs + (N + CP) * blockNum
+ofdmBlockStart = positionChirpEnd
+ofdmBlockEnd = positionChirpEnd + (N + CP) * blockNum
 dataEnd = ofdmBlockEnd + 4 * (N + CP) # 4 is the number of data OFDM blocks we are sending, should be determined by metadata
 
 hest = channel_estimate_known_ofdm(receivedSound[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
