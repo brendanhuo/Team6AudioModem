@@ -1,11 +1,13 @@
 import math
 import numpy as np
 from graphing_utils import *
+from globals import *
 
 
-def exponential_chirp(T, f1=60.0, f2=6000.0, window_strength=10.0, fs=44100):
+def exponential_chirp():
     """Produces exponential chirp with exponential envelope"""
 
+    T = chirp_length
     t_list = np.linspace(0, T, int(round(T * fs)), False)
     profile = []
     r = f2/f1
@@ -21,10 +23,10 @@ def exponential_chirp(T, f1=60.0, f2=6000.0, window_strength=10.0, fs=44100):
     return profile
 
 
-def exponential_chirp_chain(T=1, f1=60.0, f2=6000.0, window_strength=50.0, fs=44100, number_chirps=3, time_between=1):
+def exponential_chirp_chain():
     """Produces exponential chirp chain with exponential envelope"""
 
-    x = exponential_chirp(T, f1, f2, window_strength, fs)
+    x = exponential_chirp()
 
     x_chain = []
 
