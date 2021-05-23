@@ -12,6 +12,8 @@ from scipy import fft, ifft
 def Hest_from_chirp(y, plot=False):
     """Estimates impulse response from chirp, and returns frequency response"""
 
+    T = chirp_length
+
     # Create chirp
     x = exponential_chirp()
 
@@ -59,7 +61,6 @@ def Hest_from_chirp(y, plot=False):
     print(positions)
 
     estimated_positions = []
-    print(positions[2] - positions[1], positions[1] - positions[0])
 
     total = 0
     for item in positions:
@@ -85,7 +86,7 @@ def Hest_from_chirp(y, plot=False):
     for i in range(len(positions)):
         h_list.append(h[positions[i]:(positions[i] + samples)])
         if plot:
-            plot_waveform(h_list[i], "waveform {}".format(i + 1))
+            plot_waveform(h_list[i])
 
     H_list = []
 
@@ -100,13 +101,14 @@ def Hest_from_chirp(y, plot=False):
             total += H[i]
         H_average.append(total / len(H_list))
 
-    plot_frequency_response(smooth(H_average, 10))
+    if plot:
+        plot_frequency_response(smooth(H_average, 10))
 
     H_average = smooth(H_average, smoothing_factor)
 
     h_average = np.real(ifft(H_average))
 
     if plot:
-        plot_waveform(h_average, "h averaged")
+        plot_waveform(h_average)
 
     return H_average
