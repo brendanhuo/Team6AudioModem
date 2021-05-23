@@ -6,6 +6,7 @@ from chirp import *
 from channel import *
 from graphing_utils import *
 from audio_utils import *
+from chirp_channel_estimation import *
 
 
 def wav_transmission(array, filename, plot=True):
@@ -18,7 +19,7 @@ def wav_transmission(array, filename, plot=True):
     print(len(bitsSP))
 
     # Chirp
-    exponentialChirp = exponential_chirp()
+    exponentialChirp = exponential_chirp_chain()
 
     # OFDM data symbols
     sound = map_to_transmit(K, CP, pilotValue, pilotCarriers, dataCarriers, bitsSP)
@@ -47,6 +48,11 @@ def decode_and_compare_text(y, x, plot=True):
     ba = x
     dataCarriers, pilotCarriers = assign_data_pilot(K, P)
 
+    hest_chirp = Hest_from_chirp(y, plot=False)
+    hest_chirp = hest_chirp / np.linalg.norm(hest_chirp)
+    if plot:
+        plot_frequency_response(hest_chirp)
+
     # OFDM block channel estimation
 
     if maximum_likelihood_estimation:
@@ -66,6 +72,9 @@ def decode_and_compare_text(y, x, plot=True):
 
             hest = channel_estimate_known_ofdm(receivedSound[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
 
+            # Combine with chirp estimation
+            hest = hest / np.linalg.norm(hest)
+            hest = (1-chirpimportance) * hest + chirpimportance * hest_chirp
             equalizedSymbols = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance, pilotValues)
             outputData, hardDecision = demapping(equalizedSymbols, demappingTable)
 
@@ -120,16 +129,19 @@ def decode_and_compare_text(y, x, plot=True):
 
         hest = channel_estimate_known_ofdm(receivedSound[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
 
+        # Combine with chirp estimation
+        hest = hest / np.linalg.norm(hest)
+        hest = (1 - chirpimportance) * hest + chirpimportance * hest_chirp
+
         equalizedSymbols = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance, pilotValues)
         outputData, hardDecision = demapping(equalizedSymbols, demappingTable)
 
         dataToCsv = outputData.ravel()[0:len(ba)]
         demodulatedOutput = ''.join(str(e) for e in dataToCsv)
 
-        print(text_from_bits(demodulatedOutput))
         ber = calculateBER(ba, dataToCsv)
 
-        print("Bit Error Rate:" + str(ber))
+        print("Bit Error Rate at minimum ber point:" + str(ber))
 
         # Maximum Likelihood Estimate
         estimated_bits = np.array(estimated_bits)
@@ -146,6 +158,10 @@ def decode_and_compare_text(y, x, plot=True):
         dataEnd = ofdmBlockEnd + 4 * (N + CP)  # 4 is the number of data OFDM blocks we are sending, should be determined by metadata
 
         hest = channel_estimate_known_ofdm(receivedSound[positionChirpEnd: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
+
+        # Combine with chirp estimation
+        hest = hest / np.linalg.norm(hest)
+        hest = (1 - chirpimportance) * hest + chirpimportance * hest_chirp
 
         if plot:
             plt.semilogy(np.arange(N), abs(hest), label='Estimated H via known OFDM')
