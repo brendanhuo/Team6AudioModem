@@ -18,7 +18,7 @@ ba.frombytes(contents.encode('utf-8'))
 ba = np.array(ba.tolist())
 receivedSound = audioDataFromFile("audio/sound3.wav")
 
-wav_transmission(ba, "audio/output.wav", plot=True)
+# wav_transmission(ba, "audio/output.wav", plot=True)
 
 # NOTE ENSURE GLOBAL VALUES FOR THE RECEIVER MATCH THE TRANSMITTER
-print(decode_and_compare_text(receivedSound, ba, False))
+print(decode_and_compare_text(receivedSound, ba, plot=False))
