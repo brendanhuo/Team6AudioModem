@@ -40,6 +40,8 @@ number_chirps = 1
 window_strength = 50.0
 f1 = 60.0
 f2 = 6000.0
+samples = 10000
+smoothing_factor = 5
 
 # Timings
 time_before_data = 0
@@ -48,3 +50,10 @@ time_before_data = 0
 seedStart = 2000
 blockNum = 10
 
+# Maximum Likelihood Estimation
+maximum_likelihood_estimation = False
+length_of_MLE = 11
+
+# Pilot Estimation
+pilotImportance = 0.49
+pilotValues = True
