@@ -3,7 +3,8 @@ from binary_utils import *
 from transmitter import *
 from receiver import *
 from chirp import *
-from channel import * 
+from channel import *
+from audio_utils import *
 
 dataCarriers, pilotCarriers = assign_data_pilot(K, P)
 
@@ -20,25 +21,29 @@ ba = np.array(ba.tolist())
 # Append required number of zeros to end to send a full final OFDM symbol
 ba = np.append(ba, np.zeros(len(dataCarriers)*2 - (len(ba) - len(ba)//mu//len(dataCarriers) * len(dataCarriers) * mu)))
 bitsSP = ba.reshape((len(ba)//mu//len(dataCarriers), len(dataCarriers), mu))
-print(len(bitsSP))
 
 # Chirp 
-exponentialChirp = exponential_chirp(chirp_length)
-
+# exponentialChirp = exponential_chirp(chirpLength)
+exponentialChirp = exponential_chirp_chain()
 # OFDM data symbols
 sound = map_to_transmit(K, CP, pilotValue, pilotCarriers, dataCarriers, bitsSP)
+# sound = sound / np.max(sound)
 
 # Known random OFDM block for channel estimation
 knownOFDMBlock = known_ofdm_block(blockNum, seedStart, mu, K, CP, mappingTable)
+# knownOFDMBlock = knownOFDMBlock / np.max(knownOFDMBlock)
 
 # Total data sent over channel
-dataTotal = np.concatenate((np.zeros(44100), exponentialChirp.ravel(), knownOFDMBlock, sound))
+# dataTotal = np.concatenate((np.zeros(fs), exponentialChirp.ravel(), (np.zeros(fs * time_before_data)), knownOFDMBlock, sound))
+dataTotal = np.concatenate((np.zeros(fs), exponentialChirp.ravel(), knownOFDMBlock, sound))
+
+save(dataTotal, "audio/chirp_chain.wav")
 
 plt.plot(dataTotal)
 plt.title("Signal to send")
 plt.show()
 
-#write("audio/test_sound_two.wav", fs, dataTotal)
+# write("audio/chirp_chain.wav", fs, dataTotal)
 
 ### CHANNEL ###
 
@@ -62,11 +67,11 @@ plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(
 plt.show()
 
 # Symbol Recovery Test
-positionChirpStart = chirp_synchroniser(ofdmReceived, chirp_length)
+positionChirpEnd = chirp_synchroniser(ofdmReceived)
 
 # OFDM block channel estimation
-ofdmBlockStart = positionChirpStart + chirp_length * fs
-ofdmBlockEnd = positionChirpStart + chirp_length * fs + (N + CP) * blockNum
+ofdmBlockStart = positionChirpEnd
+ofdmBlockEnd = positionChirpEnd + (N + CP) * blockNum
 
 hest = channel_estimate_known_ofdm(ofdmReceived[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
 plt.plot(np.arange(N), HChannel, label = 'actual H')
@@ -77,12 +82,12 @@ plt.show()
 plt.plot(ofdmReceived[ofdmBlockEnd:])
 plt.show()
 
-equalizedSymbols = map_to_decode(ofdmReceived[ofdmBlockEnd:], hest, N, K, CP, dataCarriers)
+equalizedSymbols = map_to_decode(ofdmReceived[ofdmBlockEnd:], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue)
 outputData, hardDecision = demapping(equalizedSymbols, demappingTable)
 
 for qpsk, hard in zip(equalizedSymbols[0:400], hardDecision[0:400]):
     plt.plot([qpsk.real, hard.real], [qpsk.imag, hard.imag], 'b-o');
-    #plt.plot(hardDecision[0:400].real, hardDecision[0:400].imag, 'ro')
+    plt.plot(hardDecision[0:400].real, hardDecision[0:400].imag, 'ro')
 plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Demodulated Constellation');
 plt.show()
 
