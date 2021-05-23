@@ -32,9 +32,17 @@ mappingTable = {
 }
 demappingTable = {v : k for k, v in mappingTable.items()}
 
-# Chirp
+# Chirp Chain
 fs = 44100
-chirpLength = 1
+chirp_length = 1
+time_between = 0
+number_chirps = 1
+window_strength = 50.0
+f1 = 60.0
+f2 = 6000.0
+
+# Timings
+time_before_data = 0
 
 # OFDM known random symbols seed
 seedStart = 2000
