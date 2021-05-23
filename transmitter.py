@@ -20,7 +20,6 @@ def assign_data_pilot(K, P):
     pilotCarriers = allCarriers[1::K//P]
     dataCarriers = np.delete(allCarriers, pilotCarriers)
     dataCarriers = np.delete(dataCarriers, 0)
-    print(allCarriers, pilotCarriers, dataCarriers)
 
     return dataCarriers, pilotCarriers
 
