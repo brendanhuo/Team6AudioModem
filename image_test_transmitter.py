@@ -17,7 +17,7 @@ bitsSP = ba.reshape((len(ba)//mu//len(dataCarriers), len(dataCarriers), mu))
 print(len(bitsSP))
 
 # Chirp 
-exponentialChirp = exponential_chirp(chirp_length)
+exponentialChirp = exponential_chirp()
 
 # OFDM data symbols
 sound = map_to_transmit(K, CP, pilotValue, pilotCarriers, dataCarriers, bitsSP)
@@ -72,7 +72,7 @@ plt.show()
 plt.plot(ofdmReceived[ofdmBlockEnd:])
 plt.show()
 
-equalizedSymbols = map_to_decode(ofdmReceived[ofdmBlockEnd:], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance = 0.5, pilotValues = True)
+equalizedSymbols = map_to_decode(ofdmReceived[ofdmBlockEnd:], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance, pilotValues)
 outputData, hardDecision = demapping(equalizedSymbols, demappingTable)
 
 for qpsk, hard in zip(equalizedSymbols[0:400], hardDecision[0:400]):
