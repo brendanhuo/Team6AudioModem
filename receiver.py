@@ -194,7 +194,7 @@ def chirp_synchroniser(audio, chirp_function, T, f1=60.0, f2=6000.0, fs=44100, n
         print(estimated_positions)
 
         # estimated starting position is the last in the list, plus the chirp length and time between chirps
-        position = estimated_positions[-1] + (T + time_between) * fs
+        position = estimated_positions[-1] + time_between * fs
 
     return position
 
