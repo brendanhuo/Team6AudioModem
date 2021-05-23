@@ -23,7 +23,7 @@ bitsSP = ba.reshape((len(ba)//mu//len(dataCarriers), len(dataCarriers), mu))
 print(len(bitsSP))
 
 # Chirp 
-exponentialChirp = exponential_chirp(chirpLength)
+exponentialChirp = exponential_chirp(chirp_length)
 
 # OFDM data symbols
 sound = map_to_transmit(K, CP, pilotValue, pilotCarriers, dataCarriers, bitsSP)
@@ -62,11 +62,11 @@ plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(
 plt.show()
 
 # Symbol Recovery Test
-positionChirpStart = chirp_synchroniser(ofdmReceived, chirpLength)
+positionChirpStart = chirp_synchroniser(ofdmReceived, chirp_length)
 
 # OFDM block channel estimation
-ofdmBlockStart = positionChirpStart + chirpLength * fs
-ofdmBlockEnd = positionChirpStart + chirpLength * fs + (N + CP) * blockNum
+ofdmBlockStart = positionChirpStart + chirp_length * fs
+ofdmBlockEnd = positionChirpStart + chirp_length * fs + (N + CP) * blockNum
 
 hest = channel_estimate_known_ofdm(ofdmReceived[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
 plt.plot(np.arange(N), HChannel, label = 'actual H')
