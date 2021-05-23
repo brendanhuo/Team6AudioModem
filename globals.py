@@ -41,9 +41,14 @@ window_strength = 50.0
 f1 = 60.0
 f2 = 6000.0
 
+# Pilot Estimation
+pilotImportance = 0.5
+pilotValues = True
+
 # Chirp Estimation
 samples = 10000
-smoothing_factor = 5
+smoothing_factor = 1
+chirpimportance = 0
 
 # Timings
 time_before_data = 0
@@ -54,8 +59,4 @@ blockNum = 10
 
 # Maximum Likelihood Estimation
 maximum_likelihood_estimation = True
-length_of_MLE = 21
-
-# Pilot Estimation
-pilotImportance = 0.49
-pilotValues = True
+length_of_MLE = 11
