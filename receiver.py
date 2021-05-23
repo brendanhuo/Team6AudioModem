@@ -52,10 +52,10 @@ def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N
         # hestAtSymbols = (hestAtSymbols * i + (receivedSymbols / expectedSymbols)) / (i + 1) # Averaging over past OFDM blocks
         for j in range(N):
             if j == N//2 or j == 0:
-                hestAtSymbols[j] == 0
+                hestAtSymbols[j] = 0
             else:
-                div = (receivedSymbols[j]/expectedSymbols[j] )
-                hestAtSymbols[j] = (hestAtSymbols[j] * i + div) / (i + 1) #Average over past OFDM blocks
+                div = (receivedSymbols[j]/expectedSymbols[j])
+                hestAtSymbols[j] = (hestAtSymbols[j] * i + div) / (i + 1) # Average over past OFDM blocks
     
     return hestAtSymbols
 
@@ -194,7 +194,7 @@ def chirp_synchroniser(audio, chirp_function, T, f1=60.0, f2=6000.0, fs=44100, n
         print(estimated_positions)
 
         # estimated starting position is the last in the list, plus the chirp length and time between chirps
-        position = estimated_positions[-1] + (T + time_between)
+        position = estimated_positions[-1] + (T + time_between) * fs
 
     return position
 
