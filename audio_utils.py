@@ -11,6 +11,12 @@ sd.default.samplerate = fs  # Sample rate
 sd.default.channels = 1
 
 
+def save(array, filename):
+    """Save array as a wav file"""
+
+    write(filename, fs, array)  # Save as WAV file
+
+
 def record_and_save(filename, seconds):
     """Recording sound and saving it as a wav file"""
 
