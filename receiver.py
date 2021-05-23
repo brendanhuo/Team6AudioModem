@@ -92,9 +92,10 @@ def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotV
 
         if pilotValues:
             pilotHest = channel_estimate_pilot(data, pilotCarriers, pilotValue, N)
-
+        else:
+            pilotHest = 0
         # Hest = channelEstimate(data)
-        Hest = (1-pilotImportance)* Hest + pilotImportance*pilotHest
+        Hest = (1-pilotImportance) * Hest + pilotImportance*pilotHest
         data_equalized = data/Hest
         dataArrayEqualized.append(data_equalized[1:K][dataCarriers-1])
 
@@ -123,11 +124,13 @@ def find_location_with_pilot(approxLocation, data, rangeOfLocation, pilotValue, 
     return bestLocation, minValue
 
 
-def chirp_synchroniser(audio, chirp_function, T, f1=60.0, f2=6000.0, fs=44100, number_chirps=1, time_between=0):
+def chirp_synchroniser(audio):
     """Performs synchronization using a chirp, returning the position of the END of the chirp chain signal"""
 
+    T = chirp_length
+
     # chirp_function is the chirp function specified to match filter with
-    x = chirp_function(T)
+    x = exponential_chirp()
     x_r = x[::-1]
 
     # Format and normalise
@@ -136,6 +139,7 @@ def chirp_synchroniser(audio, chirp_function, T, f1=60.0, f2=6000.0, fs=44100, n
     # Convolve output with x_r and normalise
     h = signal.fftconvolve(x_r, y)
     h = h / np.linalg.norm(h)
+    plot_waveform(h)
 
     if number_chirps == 1:
 
