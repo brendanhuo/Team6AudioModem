@@ -36,6 +36,7 @@ def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N
 
     numberOfBlocks = len(knownOFDMBlock) // (N+CP)
     hestAtSymbols = np.zeros(N) # estimate of the channel gain at particular frequency bins
+    noise = np.zeros(N)
 
     for i in range(numberOfBlocks):
         # Retrace back the original seed
@@ -57,7 +58,21 @@ def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N
                 div = (receivedSymbols[j]/expectedSymbols[j])
                 hestAtSymbols[j] = (hestAtSymbols[j] * i + div) / (i + 1) # Average over past OFDM blocks
     
-    return hestAtSymbols
+    for i in range(numberOfBlocks):
+        # Retrace back the original seed
+        rng = default_rng(randomSeedStart + i)
+        bits = rng.binomial(n=1, p=0.5, size=((K-1)*2))
+        bitsSP = bits.reshape(len(bits)//mu, mu)
+        symbol = np.array([mappingTable[tuple(b)] for b in bitsSP])
+        expectedSymbols = np.append(np.append(0, symbol), np.append(0,np.conj(symbol)[::-1]))
+
+        receivedSymbols = knownOFDMBlock[i*(N+CP): (i+1)*(N+CP)]
+        receivedSymbols = removeCP(receivedSymbols, CP, N)
+        receivedSymbols = DFT(receivedSymbols, N)
+
+        noiseEstimate = receivedSymbols - np.multiply(hestAtSymbols, expectedSymbols)
+        noise = (noise * i + noiseEstimate) / (i + 1)
+    return hestAtSymbols, noise
 
 
 def channel_estimate_pilot(ofdmReceived, pilotCarriers, pilotValue, N):
@@ -72,8 +87,8 @@ def channel_estimate_pilot(ofdmReceived, pilotCarriers, pilotValue, N):
     # Perform interpolation between the pilot carriers to get an estimate
     # of the channel in the data carriers. Here, we interpolate absolute value and phase 
     # separately
-    hestAbs = scipy.interpolate.interp1d(np.append(pilotCarriers, N - pilotCarriers).ravel(), abs(hestAtPilots), kind='cubic', fill_value="extrapolate")(np.arange(N))
-    hestPhase = scipy.interpolate.interp1d(np.append(pilotCarriers, N - pilotCarriers).ravel(), np.angle(hestAtPilots), kind='cubic', fill_value="extrapolate")(np.arange(N))
+    hestAbs = scipy.interpolate.interp1d(np.append(pilotCarriers, N - pilotCarriers).ravel(), abs(hestAtPilots), kind='linear', fill_value="extrapolate")(np.arange(N))
+    hestPhase = scipy.interpolate.interp1d(np.append(pilotCarriers, N - pilotCarriers).ravel(), np.angle(hestAtPilots), kind='linear', fill_value="extrapolate")(np.arange(N))
     hest = hestAbs * np.exp(1j*hestPhase)
 
     return hest
@@ -84,6 +99,8 @@ def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotV
 
     dataArrayEqualized = []
     Hest = channelH
+    HestAll = []
+    noiseEstimates = []
 
     for i in range(len(audio)//(N+CP)):
         data = audio[i*(N+CP): (N+CP)*(i+1)]
@@ -94,13 +111,23 @@ def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotV
             pilotHest = channel_estimate_pilot(data, pilotCarriers, pilotValue, N)
         else:
             pilotHest = 0
-        # Hest = channelEstimate(data)
+
         Hest = (1-pilotImportance) * Hest + pilotImportance*pilotHest
+     
         data_equalized = data/Hest
         dataArrayEqualized.append(data_equalized[1:K][dataCarriers-1])
+        HestAll.append(Hest[1:K][dataCarriers-1])
 
-    return np.array(dataArrayEqualized).ravel()
+    return np.array(dataArrayEqualized).ravel(), np.array(HestAll).ravel()
 
+def unwrap_phase(Hest, N):
+    phase = np.angle(Hest[:N//2])
+    for i in range(1, len(phase)):
+        if phase[i] - phase[i-1] > np.pi:
+            phase[i:] -= 2*np.pi
+        elif phase[i-1] - phase[i] > np.pi:
+            phase[i:] += 2*np.pi          
+    return phase
 
 def find_location_with_pilot(approxLocation, data, rangeOfLocation, pilotValue, pilotCarriers, N, CP):
     """Performs fine synchronization using pilot symbols (NOT USED)"""
@@ -201,6 +228,22 @@ def chirp_synchroniser(audio):
         position = estimated_positions[-1] + time_between * fs
 
     return position
+
+# noiseSigma is a tuple of (noiseSigma.real, noiseSignal.imag)
+def return_llrs(receivedSymbols, channelEstimates, noiseSigma):
+    varianceReal = noiseSigma[0]
+    varianceImag = noiseSigma[1]
+    channelEstimateMagnitudes = np.abs(channelEstimates) ** 2
+    receivedSymbolsReal = receivedSymbols.real
+    receivedSymbolsImag = receivedSymbols.imag
+
+    llrsFirstBit = channelEstimateMagnitudes * receivedSymbolsReal * np.sqrt(2) / varianceReal
+    llrsSecondBit = channelEstimateMagnitudes * receivedSymbolsImag * np.sqrt(2) / varianceImag
+
+    llrs = np.empty((llrsFirstBit.size + llrsSecondBit.size,), dtype=llrsFirstBit.dtype)
+    llrs[0::2] = llrsFirstBit
+    llrs[1::2] = llrsSecondBit
+    return llrs
 
 
 def demapping(qpsk, demappingTable):

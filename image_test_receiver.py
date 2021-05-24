@@ -36,9 +36,13 @@ ofdmBlockStart = positionChirpEnd
 ofdmBlockEnd = positionChirpEnd + (N + CP) * blockNum
 dataEnd = ofdmBlockEnd + 1584 * (N + CP) # 4 is the number of data OFDM blocks we are sending, should be determined by metadata
 
-hest = channel_estimate_known_ofdm(receivedSound[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
+hest, noise = channel_estimate_known_ofdm(receivedSound[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
 plt.semilogy(np.arange(N), abs(hest), label='Estimated H via known OFDM')
 plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
+plt.show()
+
+plt.semilogy(np.arange(N), abs(noise), label='Estimated noise via known OFDM')
+plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|N(f)|$'); plt.legend(fontsize=10)
 plt.show()
 
 hestImpulse = np.fft.ifft(hest)[0:N//2]
@@ -46,7 +50,17 @@ plt.plot(np.arange(N//2), hestImpulse[0:N//2])
 plt.title('Impulse response')
 plt.show()
 
-equalizedSymbols = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance, pilotValues)
+noiseEstimateReal = np.mean(noise.real ** 2)
+noiseEstimateImag = np.mean(noise.imag ** 2)
+
+print("Estimated real part of noise: " + str(noiseEstimateReal))
+print("Estimated imaginary part of noise: " + str(noiseEstimateImag))
+
+equalizedSymbols, hestAll = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance, pilotValues)
+
+llrsReceived = return_llrs(equalizedSymbols, hestAll, (noiseEstimateReal, noiseEstimateImag))
+print(llrsReceived[:100])
+
 outputData, hardDecision = demapping(equalizedSymbols , demappingTable)
 z = np.arange(N//2-1)
 plt.scatter(equalizedSymbols[0:N//2-1].real, equalizedSymbols[0:N//2-1].imag, c=z, cmap="bwr")
