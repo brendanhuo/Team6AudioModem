@@ -37,7 +37,7 @@ fs = 44100
 chirp_length = 1
 time_between = 0
 number_chirps = 1
-window_strength = 50.0
+window_strength = 10.0
 f1 = 60.0
 f2 = 6000.0
 
@@ -48,7 +48,8 @@ pilotValues = True
 # Chirp Estimation
 samples = 10000
 smoothing_factor = 1
-chirpimportance = 0
+chirpimportance = 0.5
+method_2 = False
 
 # Timings
 time_before_data = 0
