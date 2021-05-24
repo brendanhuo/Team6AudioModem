@@ -7,6 +7,7 @@ from channel import *
 from graphing_utils import *
 from audio_utils import *
 from chirp_channel_estimation import *
+from scipy import fft, ifft
 
 
 def wav_transmission(array, filename, plot=True):
@@ -50,8 +51,11 @@ def decode_and_compare_text(y, x, plot=True):
 
     hest_chirp = Hest_from_chirp(y, plot=False)
     hest_chirp = hest_chirp / np.linalg.norm(hest_chirp)
+    
     if plot:
         plot_frequency_response(hest_chirp)
+        test = ifft(hest_chirp)
+        plot_waveform(test)
 
     # OFDM block channel estimation
 
@@ -59,22 +63,35 @@ def decode_and_compare_text(y, x, plot=True):
 
         estimated_bits = [0] * len(x)
         detected_position = positionChirpEnd
+        bias = - length_of_MLE // 2
         positionChirpEnd -= length_of_MLE // 2
-        print(positionChirpEnd)
         BER = []
 
         for i in range(length_of_MLE):
 
             positionChirpEnd += 1
+            bias += 1
             ofdmBlockStart = positionChirpEnd
             ofdmBlockEnd = positionChirpEnd + (N + CP) * blockNum
             dataEnd = ofdmBlockEnd + 4 * (N + CP)  # 4 is the number of data OFDM blocks we are sending, should be determined by metadata
 
             hest = channel_estimate_known_ofdm(receivedSound[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
+            hest_chirp = Hest_from_chirp(y, plot=False, bias=bias)
+            hest_chirp = hest_chirp / np.linalg.norm(hest_chirp)
+
+            if plot:
+                plot_frequency_response(hest_chirp)
+                plot_waveform(ifft(hest_chirp)[:3000])
 
             # Combine with chirp estimation
             hest = hest / np.linalg.norm(hest)
+
+            if plot:
+                plot_frequency_response(hest)
+                plot_waveform(ifft(hest)[:3000])
+
             hest = (1-chirpimportance) * hest + chirpimportance * hest_chirp
+
             equalizedSymbols = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance, pilotValues)
             outputData, hardDecision = demapping(equalizedSymbols, demappingTable)
 
