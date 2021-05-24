@@ -55,10 +55,13 @@ def calculateBER(ba, audioOutput):
     return errorCount / len(ba)
 
 def image2bits(image_path, plot = False):
-    img = plt.imread(image_path).ravel()
+
+    img = plt.imread(image_path)
+    img_shape = img.shape
+    img = img.ravel()
     
     if plot:
-        plt.imshow(img.reshape(489, 725, 4))
+        plt.imshow(img.reshape(img_shape))
         plt.title("Sent image")
         plt.show()
         
@@ -72,4 +75,4 @@ def image2bits(image_path, plot = False):
     for bit in bits:
         ba.append(int(bit))
     ba = np.array(ba)
-    return ba
+    return ba, img_shape

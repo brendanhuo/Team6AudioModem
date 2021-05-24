@@ -8,14 +8,14 @@ from channel import *
 dataCarriers, pilotCarriers = assign_data_pilot(K, P)
 
 ### TRANSMITTER ###
-image_path = "./image/bali.tif"
-ba = image2bits(image_path)
+image_path = "./image/autumn.tif"
+ba, image_shape = image2bits(image_path, plot = True)
 print(len(ba))
 
 ba = np.append(ba, np.zeros(len(dataCarriers)*2 - (len(ba) - len(ba)//mu//len(dataCarriers) * len(dataCarriers) * mu)))
 bitsSP = ba.reshape((len(ba)//mu//len(dataCarriers), len(dataCarriers), mu))
-print(len(bitsSP))
-
+numOFDMblocks = len(bitsSP)
+print(numOFDMblocks)
 # Chirp 
 exponentialChirp = exponential_chirp()
 
@@ -32,7 +32,7 @@ plt.plot(dataTotal)
 plt.title("Signal to send")
 plt.show()
 
-write("audio/img_sound_send_1.wav", fs, dataTotal)
+write("audio/img_sound_send_autumn.wav", fs, dataTotal)
 
 ### CHANNEL ###
 
@@ -56,12 +56,12 @@ plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(
 plt.show()
 
 # Symbol Recovery Test
-positionChirpStart = chirp_synchroniser(ofdmReceived)
+positionChirpEnd = chirp_synchroniser(ofdmReceived)
 
 # OFDM block channel estimation
-ofdmBlockStart = positionChirpStart + chirp_length * fs
-ofdmBlockEnd = positionChirpStart + chirp_length * fs + (N + CP) * blockNum
-dataEnd = ofdmBlockEnd + 1584 * (N + CP) # 4 is the number of data OFDM blocks we are sending, should be determined by metadata
+ofdmBlockStart = positionChirpEnd
+ofdmBlockEnd = positionChirpEnd + (N + CP) * blockNum
+dataEnd = ofdmBlockEnd + numOFDMblocks * (N + CP) 
 
 hest = channel_estimate_known_ofdm(ofdmReceived[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
 plt.semilogy(np.arange(N), HChannel, label = 'actual H')
@@ -82,11 +82,16 @@ plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title
 plt.show()
 
 dataToCsv = outputData.ravel()[:len(ba)]
+ber = calculateBER(ba, dataToCsv)
+print("Bit Error Rate:" + str(ber))
 byte_array = []
 for i in range (len(dataToCsv)//8):
     demodulatedOutput = ''.join(str(e) for e in dataToCsv[8*i:8*(i+1)])
     byte_array.append(int(demodulatedOutput,2))
-plt.imshow(np.array(byte_array)[0:1418100].reshape(489, 725, 4))
+lenBytes = 1
+for shape in image_shape:
+    lenBytes *= shape
+plt.imshow(np.array(byte_array)[0:lenBytes].reshape(image_shape))
 plt.show()
 
 

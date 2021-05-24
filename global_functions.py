@@ -8,7 +8,6 @@ from graphing_utils import *
 from audio_utils import *
 from chirp_channel_estimation import *
 
-
 def wav_transmission(array, filename, plot=True):
     """Takes inputted array and saves modulated wav file for playback"""
 
@@ -46,6 +45,7 @@ def decode_and_compare_text(y, x, plot=True):
     positionChirpEnd -= 0
     receivedSound = y
     ba = x
+    print(len(ba))
     dataCarriers, pilotCarriers = assign_data_pilot(K, P)
 
     hest_chirp = Hest_from_chirp(y, plot=False)
@@ -75,6 +75,7 @@ def decode_and_compare_text(y, x, plot=True):
             # Combine with chirp estimation
             hest = hest / np.linalg.norm(hest)
             hest = (1-chirpimportance) * hest + chirpimportance * hest_chirp
+
             equalizedSymbols = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance, pilotValues)
             outputData, hardDecision = demapping(equalizedSymbols, demappingTable)
 

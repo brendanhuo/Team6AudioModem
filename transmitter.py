@@ -10,7 +10,7 @@ from scipy.io.wavfile import write
 from numpy.random import default_rng
 
 
-def assign_data_pilot(K, P):
+def assign_data_pilot(K, P, bandLimited = False):
     """ Define the data carriers and pilot tone carriers
     # N - the DFT size
     # K - number of OFDM subcarriers with information
@@ -19,7 +19,11 @@ def assign_data_pilot(K, P):
     allCarriers = np.arange(K)
     pilotCarriers = allCarriers[1::K//P]
     dataCarriers = np.delete(allCarriers, pilotCarriers)
-    dataCarriers = np.delete(dataCarriers, 0)
+
+    if bandLimited:
+        dataCarriers = np.delete(dataCarriers, 0)[0:len(dataCarriers)//3]
+    else:
+        dataCarriers = np.delete(dataCarriers, 0)
 
     return dataCarriers, pilotCarriers
 
