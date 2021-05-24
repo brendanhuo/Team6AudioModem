@@ -7,15 +7,20 @@ from channel import *
 from graphing_utils import *
 from audio_utils import *
 from scipy import fft, ifft
+import scipy.signal as sig
 
 
-def Hest_from_chirp(y, plot=False):
+def Hest_from_chirp(y, plot=False, bias=0):
     """Estimates impulse response from chirp, and returns frequency response"""
 
     T = chirp_length
 
     # Create chirp
     x = exponential_chirp()
+
+    if plot:
+        plot_waveform(x)
+        plot_frequency_response(fft(x))
 
     # Create normalised time-reversed signal
     x_r = x[::-1]
@@ -26,14 +31,22 @@ def Hest_from_chirp(y, plot=False):
 
     x_r = x_r / np.linalg.norm(x_r)
 
+    if plot:
+        plot_waveform(x_r)
+        plot_frequency_response(fft(x_r))
+
     # Normalise
     y = y / np.linalg.norm(y)
+
+    ir = sig.fftconvolve(x, x_r, mode='same')
 
     # Convolve output with x_r and normalise
     h = signal.fftconvolve(x_r, y)
     h = h / np.linalg.norm(h)
 
-    # plot_waveform(h, "Convoluted Signal")
+    if plot:
+        plot_waveform(h)
+        plot_waveform(ir)
 
     h_copy = h
 
@@ -58,7 +71,6 @@ def Hest_from_chirp(y, plot=False):
                     break
 
     positions.sort()
-    print(positions)
 
     estimated_positions = []
 
@@ -79,12 +91,17 @@ def Hest_from_chirp(y, plot=False):
             estimated_positions.append(round(centre - (i + 1) * (T + time_between) * fs))
 
     estimated_positions.sort()
-    print(estimated_positions)
 
     h_list = []
 
-    for i in range(len(positions)):
-        h_list.append(h[positions[i]:(positions[i] + samples)])
+    for i in range(len(estimated_positions)):
+        h_temp = h[estimated_positions[i] - bias:(estimated_positions[i] - bias + N // 2)]
+        h_temp = np.array(h_temp)
+        h_back = h_temp[::-1]
+        h_temp = np.append(h_temp, h_back)
+        h_temp = h_temp.tolist()
+        h_list.append(h_temp)
+
         if plot:
             plot_waveform(h_list[i])
 
@@ -102,7 +119,7 @@ def Hest_from_chirp(y, plot=False):
         H_average.append(total / len(H_list))
 
     if plot:
-        plot_frequency_response(smooth(H_average, 10))
+        plot_frequency_response(smooth(H_average, 1))
 
     H_average = smooth(H_average, smoothing_factor)
 
@@ -111,4 +128,27 @@ def Hest_from_chirp(y, plot=False):
     if plot:
         plot_waveform(h_average)
 
+    if method_2:
+        H_average = [0.0]*N
+
+        for i in range(len(estimated_positions)):
+            H_temp = H_method_2(estimated_positions[i], y, exponential_chirp())
+
+            for j in range(N):
+                H_average[j] += H_temp[j]
+
+    H_average = np.array(H_average)
+
     return H_average
+
+
+def H_method_2(position, y, x):
+
+    noisy_signal = y[(position - len(x)):position]
+    noisy_signal = noisy_signal / np.max(noisy_signal)
+    x = x / np.max(x)
+
+    h = ifft(fft(noisy_signal) / fft(x))
+    H = fft(h, N)
+
+    return smooth(H, smoothing_factor)
