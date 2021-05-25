@@ -59,5 +59,5 @@ seedStart = 2000
 blockNum = 10
 
 # Maximum Likelihood Estimation
-maximum_likelihood_estimation = True
+maximum_likelihood_estimation = False
 length_of_MLE = 11

@@ -84,6 +84,7 @@ def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotV
 
     dataArrayEqualized = []
     Hest = channelH
+    HestAggregate = []
 
     for i in range(len(audio)//(N+CP)):
         data = audio[i*(N+CP): (N+CP)*(i+1)]
@@ -99,7 +100,9 @@ def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotV
         data_equalized = data/Hest
         dataArrayEqualized.append(data_equalized[1:K][dataCarriers-1])
 
-    return np.array(dataArrayEqualized).ravel()
+        HestAggregate.append(Hest[1:K][dataCarriers-1])
+
+    return np.array(dataArrayEqualized).ravel(), np.array(HestAggregate).ravel()
 
 
 def find_location_with_pilot(approxLocation, data, rangeOfLocation, pilotValue, pilotCarriers, N, CP):
@@ -201,6 +204,23 @@ def chirp_synchroniser(audio):
         position = estimated_positions[-1] + time_between * fs
 
     return position
+
+# noiseSigma is a tuple of (noiseSigma.real, noiseSignal.imag)
+def return_llrs(receivedSymbols, channelEstimates, noiseSigma):
+    varianceReal = noiseSigma[0]
+    varianceImag = noiseSigma[1]
+    channelEstimateMagnitudes = np.abs(channelEstimates) ** 2
+    receivedSymbolsReal = receivedSymbols.real
+    receivedSymbolsImag = receivedSymbols.imag
+
+    llrsFirstBit = channelEstimateMagnitudes * receivedSymbolsImag / varianceImag # Right now, constellations not normalized so have to add in sqrt(2) later
+    llrsSecondBit = channelEstimateMagnitudes * receivedSymbolsReal / varianceReal
+    
+
+    llrs = np.empty((llrsFirstBit.size + llrsSecondBit.size,), dtype=llrsFirstBit.dtype)
+    llrs[0::2] = llrsFirstBit
+    llrs[1::2] = llrsSecondBit
+    return llrs
 
 
 def demapping(qpsk, demappingTable):
