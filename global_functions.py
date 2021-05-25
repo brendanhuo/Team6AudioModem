@@ -92,7 +92,7 @@ def decode_and_compare_text(y, x, plot=True):
 
             hest = (1-chirpimportance) * hest + chirpimportance * hest_chirp
 
-            equalizedSymbols = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance, pilotValues)
+            equalizedSymbols, _ = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance, pilotValues)
             outputData, hardDecision = demapping(equalizedSymbols, demappingTable)
 
             dataToCsv = outputData.ravel()[0:len(ba)]
@@ -150,7 +150,7 @@ def decode_and_compare_text(y, x, plot=True):
         hest = hest / np.linalg.norm(hest)
         hest = (1 - chirpimportance) * hest + chirpimportance * hest_chirp
 
-        equalizedSymbols = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance, pilotValues)
+        equalizedSymbols, _ = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance, pilotValues)
         outputData, hardDecision = demapping(equalizedSymbols, demappingTable)
 
         dataToCsv = outputData.ravel()[0:len(ba)]
@@ -197,7 +197,7 @@ def decode_and_compare_text(y, x, plot=True):
             plt.ylabel("Impulse response magnitude")
             plt.show()
 
-        equalizedSymbols = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance, pilotValues)
+        equalizedSymbols, _ = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance, pilotValues)
         outputData, hardDecision = demapping(equalizedSymbols, demappingTable)
         z = np.arange(N // 2 - 1)
 

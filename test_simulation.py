@@ -54,7 +54,7 @@ knownOFDMBlock = known_ofdm_block(blockNum, seedStart, mu, K, CP, mappingTable)
 # dataTotal = np.concatenate((np.zeros(fs), exponentialChirp.ravel(), (np.zeros(fs * time_before_data)), knownOFDMBlock, sound))
 dataTotal = np.concatenate((np.zeros(fs), exponentialChirp.ravel(), knownOFDMBlock, sound))
 
-# save(dataTotal, "audio/chirp_chain.wav")
+# save(dataTotal, "audio/text_ldpc_1.wav")
 
 plt.plot(dataTotal)
 plt.title("Signal to send")
@@ -101,7 +101,7 @@ plt.plot(ofdmReceived[ofdmBlockEnd:])
 equalizedSymbols, hestAggregate = map_to_decode(ofdmReceived[ofdmBlockEnd:], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue)
 
 # Noise variances shown for now
-noiseVariances = [0.2, 0.2]
+noiseVariances = [0.0001, 0.0001]
 llrsReceived = return_llrs(equalizedSymbols, hestAggregate, noiseVariances)[:-numZerosAppend]
 llrsReceived = np.reshape(llrsReceived, (-1, 2 * ldpcCoder.K))
 outputData = []
@@ -124,3 +124,5 @@ dataToCsv = np.array(outputData, dtype=int)
 demodulatedOutput = ''.join(str(e) for e in dataToCsv)
 print(text_from_bits(demodulatedOutput))
 
+ber = calculateBER(ba, dataToCsv)
+print("BER: " + str(ber))

@@ -36,7 +36,7 @@ plt.plot(np.arange(N//2), hestImpulse[0:N//2])
 plt.title('Impulse response')
 plt.show()
 
-equalizedSymbols = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance = 0.5, pilotValues = True)
+equalizedSymbols, _ = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance = 0.5, pilotValues = True)
 outputData, hardDecision = demapping(equalizedSymbols , demappingTable)
 z = np.arange(N//2-1)
 plt.scatter(equalizedSymbols[0:N//2-1].real, equalizedSymbols[0:N//2-1].imag, c=z, cmap="bwr")
