@@ -9,7 +9,6 @@ from audio_utils import *
 from chirp_channel_estimation import *
 from scipy import fft, ifft
 
-
 def wav_transmission(array, filename, plot=True):
     """Takes inputted array and saves modulated wav file for playback"""
 
@@ -47,6 +46,7 @@ def decode_and_compare_text(y, x, plot=True):
     positionChirpEnd -= 0
     receivedSound = y
     ba = x
+    print(len(ba))
     dataCarriers, pilotCarriers = assign_data_pilot(K, P)
 
     hest_chirp = Hest_from_chirp(y, plot=False)

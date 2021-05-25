@@ -76,10 +76,17 @@ def channel_estimate_pilot(ofdmReceived, pilotCarriers, pilotValue, N):
     hestPhase = scipy.interpolate.interp1d(np.append(pilotCarriers, N - pilotCarriers).ravel(), np.angle(hestAtPilots), kind='cubic', fill_value="extrapolate")(np.arange(N))
     hest = hestAbs * np.exp(1j*hestPhase)
 
+    #plt.figure(1)
+    #plt.plot(hestPhase)
+    #plt.title('No unwrap')
+    #plt.figure(2)
+    #plt.plot(np.unwrap(4 * hestPhase) / 4)
+    #plt.title('With unwrap')
+    #plt.show()
     return hest
 
 
-def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance = 0.2, pilotValues = False):
+def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance = 0, pilotValues = True):
     """Builds demodulated constellation symbol from OFDM symbols"""
 
     dataArrayEqualized = []
@@ -98,7 +105,7 @@ def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotV
         # Hest = channelEstimate(data)
         Hest = (1-pilotImportance) * Hest + pilotImportance*pilotHest
         data_equalized = data/Hest
-        dataArrayEqualized.append(data_equalized[1:K][dataCarriers-1])
+        dataArrayEqualized.append(data_equalized[0:K][dataCarriers])
 
         HestAggregate.append(Hest[1:K][dataCarriers-1])
 

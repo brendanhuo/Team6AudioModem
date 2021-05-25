@@ -5,27 +5,17 @@ from receiver import *
 from chirp import *
 from channel import * 
 
-# # Comment out if not recording
-#print('Recording')
-
-#listening_time = 7
-#r = sd.rec(int(listening_time * fs), samplerate=fs, channels=1)
-#sd.wait()  # Wait until recording is finished
-#write('audio/img_sound1.wav', fs, r)  # Save as WAV file
-
-#audio_received = []
-#for i in range(len(r)):
-#    audio_received.append(r[i][0])
-
-#np.save("audio/img_sound1.npy", np.asarray(audio_received))
-
-image_path = "./image/bali.tif"
-ba = image2bits(image_path, True)
+image_path = "./image/autumn.tif"
+ba, image_shape = image2bits(image_path, True)
 print(len(ba))
 
-dataCarriers, pilotCarriers = assign_data_pilot(K, P)
+dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = False)
 
-receivedSound = np.load("audio/img_sound1.npy")
+ba = np.append(ba, np.zeros(len(dataCarriers)*2 - (len(ba) - len(ba)//mu//len(dataCarriers) * len(dataCarriers) * mu)))
+bitsSP = ba.reshape((len(ba)//mu//len(dataCarriers), len(dataCarriers), mu))
+numOFDMblocks = len(bitsSP)
+
+receivedSound = np.load("audio/image_received_autumn.npy")
 plt.plot(receivedSound)
 plt.show()
 
@@ -34,7 +24,7 @@ positionChirpEnd = chirp_synchroniser(receivedSound)
 # OFDM block channel estimation
 ofdmBlockStart = positionChirpEnd
 ofdmBlockEnd = positionChirpEnd + (N + CP) * blockNum
-dataEnd = ofdmBlockEnd + 1584 * (N + CP) # 4 is the number of data OFDM blocks we are sending, should be determined by metadata
+dataEnd = ofdmBlockEnd + numOFDMblocks * (N + CP) # 4 is the number of data OFDM blocks we are sending, should be determined by metadata
 
 hest = channel_estimate_known_ofdm(receivedSound[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
 plt.semilogy(np.arange(N), abs(hest), label='Estimated H via known OFDM')
@@ -46,7 +36,7 @@ plt.plot(np.arange(N//2), hestImpulse[0:N//2])
 plt.title('Impulse response')
 plt.show()
 
-equalizedSymbols = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance, pilotValues)
+equalizedSymbols = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance = 0.5, pilotValues = True)
 outputData, hardDecision = demapping(equalizedSymbols , demappingTable)
 z = np.arange(N//2-1)
 plt.scatter(equalizedSymbols[0:N//2-1].real, equalizedSymbols[0:N//2-1].imag, c=z, cmap="bwr")
@@ -61,12 +51,22 @@ dataToCsv = outputData.ravel()[:len(ba)]
 
 ber = calculateBER(ba, dataToCsv)
 print("Bit Error Rate:" + str(ber))
-
+'''
+errors = np.zeros((N//2-P-1)*2)
+for i in range(1300):
+    for l in range((N//2-P-1)*2):
+        if dataToCsv[l+i*(N//2-P-1)*2] != ba[l+i*(N//2-P-1)*2]:
+            errors[l] += 1
+plt.plot(errors)
+plt.show()'''
 byte_array = []
 for i in range (len(dataToCsv)//8):
     demodulatedOutput = ''.join(str(e) for e in dataToCsv[8*i:8*(i+1)])
     byte_array.append(int(demodulatedOutput,2))
-plt.imshow(np.array(byte_array)[0:1418100].reshape(489, 725, 4))
+lenBytes = 1
+for shape in image_shape:
+    lenBytes *= shape
+plt.imshow(np.array(byte_array)[0:lenBytes].reshape(image_shape))
 plt.title('Image received')
 plt.show()
 
