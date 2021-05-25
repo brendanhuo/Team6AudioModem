@@ -35,7 +35,7 @@ def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N
     """Channel estimate using known OFDM block symbols"""
 
     numberOfBlocks = len(knownOFDMBlock) // (N+CP)
-    hestAtSymbols = np.zeros(N) # estimate of the channel gain at particular frequency bins
+    hestAtSymbols = np.zeros(N, dtype = complex) # estimate of the channel gain at particular frequency bins
 
     for i in range(numberOfBlocks):
         # Retrace back the original seed
@@ -56,7 +56,7 @@ def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N
             else:
                 div = (receivedSymbols[j]/expectedSymbols[j])
                 hestAtSymbols[j] = (hestAtSymbols[j] * i + div) / (i + 1) # Average over past OFDM blocks
-    
+            
     return hestAtSymbols
 
 
@@ -91,7 +91,7 @@ def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotV
 
     dataArrayEqualized = []
     Hest = channelH
-
+    np.save("testing_angles.npy", np.asarray(np.angle(Hest)))
     for i in range(len(audio)//(N+CP)):
         data = audio[i*(N+CP): (N+CP)*(i+1)]
         data = removeCP(data, CP, N)

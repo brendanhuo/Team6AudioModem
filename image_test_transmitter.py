@@ -5,7 +5,7 @@ from receiver import *
 from chirp import *
 from channel import * 
 
-dataCarriers, pilotCarriers = assign_data_pilot(K, P)
+dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited=True)
 
 ### TRANSMITTER ###
 image_path = "./image/autumn.tif"
