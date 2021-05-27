@@ -38,7 +38,7 @@ def wav_transmission(array, filename, plot=True):
     write(filename, fs, dataTotal)
 
 
-def decode_and_compare_text(y, x, plot=True):
+def decode_and_compare_text(y, x, plot=True, maximum_likelihood_estimation = True):
     """Decodes array and returns decoded file and BER"""
 
     positionChirpEnd = chirp_synchroniser(y)
@@ -92,7 +92,7 @@ def decode_and_compare_text(y, x, plot=True):
 
             hest = (1-chirpimportance) * hest + chirpimportance * hest_chirp
 
-            equalizedSymbols, _ = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance, pilotValues)
+            equalizedSymbols, _ = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance=0.5, pilotValues=True)
             outputData, hardDecision = demapping(equalizedSymbols, demappingTable)
 
             dataToCsv = outputData.ravel()[0:len(ba)]
@@ -206,7 +206,7 @@ def decode_and_compare_text(y, x, plot=True):
             plt.show()
 
         if plot:
-            for qpsk, hard in zip(equalizedSymbols[2*(N//2-P-1):11000], hardDecision[2*(N//2-P-1):11000]):
+            for qpsk, hard in zip(equalizedSymbols[0:400], hardDecision[0:400]):
                 plt.plot([qpsk.real, hard.real], [qpsk.imag, hard.imag], 'b-o');
                 plt.plot(hardDecision[0:400].real, hardDecision[0:400].imag, 'ro')
                 plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Demodulated Constellation');

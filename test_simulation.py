@@ -19,6 +19,8 @@ ba = bitarray.bitarray()
 ba.frombytes(contents.encode('utf-8'))
 ba = np.array(ba.tolist())
 
+lenData = len(ba)
+
 # LDPC encoding
 
 ldpcCoder = ldpc.code()
@@ -36,7 +38,7 @@ ba = np.array(ldpcConvert).ravel()
 
 # Append required number of zeros to end to send a full final OFDM symbol
 numZerosAppend = len(dataCarriers)*2 - (len(ba) - len(ba)//mu//len(dataCarriers) * len(dataCarriers) * mu)
-ba = np.append(ba, np.zeros(numZerosAppend))
+ba = np.append(ba, np.random.binomial(n=1, p=0.5, size=(numZerosAppend, )))
 bitsSP = ba.reshape((len(ba)//mu//len(dataCarriers), len(dataCarriers), mu))
 
 # Chirp 
@@ -52,12 +54,12 @@ knownOFDMBlock = known_ofdm_block(blockNum, seedStart, mu, K, CP, mappingTable)
 
 # Total data sent over channel
 # dataTotal = np.concatenate((np.zeros(fs), exponentialChirp.ravel(), (np.zeros(fs * time_before_data)), knownOFDMBlock, sound))
-dataTotal = np.concatenate((np.zeros(fs), exponentialChirp.ravel(), knownOFDMBlock, sound))
+dataTotal = np.concatenate((np.zeros(fs), exponentialChirp.ravel(), knownOFDMBlock, sound, np.zeros(fs)))
 
 # save(dataTotal, "audio/text_ldpc_1.wav")
 
 plt.plot(dataTotal)
-plt.title("Signal to send")
+plt.title("Signal to send"); plt.xlabel('Sample number'); plt.ylabel('Sound amplitude');
 plt.show()
 
 # write("audio/chirp_chain.wav", fs, dataTotal)
@@ -95,13 +97,13 @@ plt.plot(np.arange(N), abs(hest), label='Estimated H')
 plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
 plt.show()
 
-plt.plot(ofdmReceived[ofdmBlockEnd:])
+# plt.plot(ofdmReceived[ofdmBlockEnd:])
 # plt.show()
 
-equalizedSymbols, hestAggregate = map_to_decode(ofdmReceived[ofdmBlockEnd:], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue)
+equalizedSymbols, hestAggregate = map_to_decode(ofdmReceived[ofdmBlockEnd:], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotValues = False)
 
 # Noise variances shown for now
-noiseVariances = [0.0001, 0.0001]
+noiseVariances = [0.01, 0.01]
 llrsReceived = return_llrs(equalizedSymbols, hestAggregate, noiseVariances)[:-numZerosAppend]
 llrsReceived = np.reshape(llrsReceived, (-1, 2 * ldpcCoder.K))
 outputData = []
@@ -112,15 +114,15 @@ outputData = np.array(outputData).ravel()
 np.place(outputData, outputData>0, int(0))
 np.place(outputData, outputData<0, int(1))
 
-# outputData, hardDecision = demapping(equalizedSymbols, demappingTable)
+#outputData, hardDecision = demapping(equalizedSymbols, demappingTable)
 
-# for qpsk, hard in zip(equalizedSymbols[0:400], hardDecision[0:400]):
-#     plt.plot([qpsk.real, hard.real], [qpsk.imag, hard.imag], 'b-o');
-#     plt.plot(hardDecision[0:400].real, hardDecision[0:400].imag, 'ro')
-# plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Demodulated Constellation');
-# plt.show()
+#for qpsk, hard in zip(equalizedSymbols[0:400], hardDecision[0:400]):
+#    plt.plot([qpsk.real, hard.real], [qpsk.imag, hard.imag], 'b-o');
+#    plt.plot(hardDecision[0:400].real, hardDecision[0:400].imag, 'ro')
+#plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Demodulated Constellation');
+#plt.show()
 
-dataToCsv = np.array(outputData, dtype=int)
+dataToCsv = np.array(outputData, dtype=int)[:lenData]
 demodulatedOutput = ''.join(str(e) for e in dataToCsv)
 print(text_from_bits(demodulatedOutput))
 

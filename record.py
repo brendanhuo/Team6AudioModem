@@ -8,13 +8,13 @@ from channel import *
 # Comment out if not recording
 print('Recording')
 
-listening_time = 8
+listening_time = 160
 r = sd.rec(int(listening_time * fs), samplerate=fs, channels=1)
 sd.wait()  # Wait until recording is finished
-write('audio/text_ldpc_received_1.wav', fs, r)  # Save as WAV file
+write('audio/image_received_autumn_5_ldpc.wav', fs, r)  # Save as WAV file
 
 audio_received = []
 for i in range(len(r)):
     audio_received.append(r[i][0])
 
-np.save("audio/text_ldpc_received_1.npy", np.asarray(audio_received))
+np.save("audio/image_received_autumn_5_ldpc.npy", np.asarray(audio_received))

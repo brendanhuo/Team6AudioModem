@@ -4,18 +4,51 @@ from transmitter import *
 from receiver import *
 from chirp import *
 from channel import * 
+from ldpc_jossy.py import ldpc
 
 dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited=True)
 
 ### TRANSMITTER ###
 image_path = "./image/autumn.tif"
 ba, image_shape = image2bits(image_path, plot = True)
-print(len(ba))
+imageData = ba
+lenData = len(ba)
+print(lenData)
+# LDPC encoding
+ldpcCoder = ldpc.code()
+ldpcBlockLength = ldpcCoder.K
 
-ba = np.append(ba, np.zeros(len(dataCarriers)*2 - (len(ba) - len(ba)//mu//len(dataCarriers) * len(dataCarriers) * mu)))
+# Pad ba for ldpc
+ba = np.append(ba, np.zeros(((len(ba)) // ldpcBlockLength + 1) * ldpcBlockLength - len(ba)))
+ba = np.reshape(ba, (-1, ldpcBlockLength))
+ldpcConvert = []
+for i in range(len(ba)):
+    encoded = ldpcCoder.encode(ba[i])
+    ldpcConvert.append(encoded)
+
+ba = np.array(ldpcConvert).ravel()
+print(len(ba))
+dataToCsv = ba.astype(int).ravel()[:lenData]
+
+byte_array = []
+for i in range (len(dataToCsv)//8):
+    demodulatedOutput = ''.join(str(e) for e in dataToCsv[8*i:8*(i+1)])
+    byte_array.append(int(demodulatedOutput,2))
+lenBytes = 1
+for shape in image_shape:
+    lenBytes *= shape
+plt.imshow(np.array(byte_array)[0:lenBytes].reshape(image_shape))
+plt.show()
+
+#pad ba for OFDM block length
+numZerosAppend = len(dataCarriers)*2 - (len(ba) - len(ba)//mu//len(dataCarriers) * len(dataCarriers) * mu)
+#ba = np.append(ba, np.zeros(len(dataCarriers)*2 - (len(ba) - len(ba)//mu//len(dataCarriers) * len(dataCarriers) * mu)))
+ba = np.append(ba, np.random.binomial(n=1, p=0.5, size=(numZerosAppend, )))
 bitsSP = ba.reshape((len(ba)//mu//len(dataCarriers), len(dataCarriers), mu))
 numOFDMblocks = len(bitsSP)
 print(numOFDMblocks)
+
+print(len(ba))
 # Chirp 
 exponentialChirp = exponential_chirp()
 
@@ -30,9 +63,10 @@ dataTotal = np.concatenate((np.zeros(44100), exponentialChirp.ravel(), knownOFDM
 
 plt.plot(dataTotal)
 plt.title("Signal to send")
+plt.xlabel('Sample number');plt.ylabel('Sound amplitude');
 plt.show()
 
-write("audio/img_sound_send_autumn.wav", fs, dataTotal)
+write("audio/img_sound_send_autumn_15000.wav", fs, dataTotal)
 
 ### CHANNEL ###
 
@@ -72,17 +106,31 @@ plt.show()
 plt.plot(ofdmReceived[ofdmBlockEnd:])
 plt.show()
 
-equalizedSymbols = map_to_decode(ofdmReceived[ofdmBlockEnd:], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance, pilotValues)
+equalizedSymbols, hestAggregate = map_to_decode(ofdmReceived[ofdmBlockEnd:], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance, pilotValues)
 outputData, hardDecision = demapping(equalizedSymbols, demappingTable)
 
-for qpsk, hard in zip(equalizedSymbols[0:400], hardDecision[0:400]):
-    plt.plot([qpsk.real, hard.real], [qpsk.imag, hard.imag], 'b-o');
-    #plt.plot(hardDecision[0:400].real, hardDecision[0:400].imag, 'ro')
-plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Demodulated Constellation');
-plt.show()
+print(len(equalizedSymbols))
+# Noise variances shown for now
+noiseVariances = [0.01, 0.01]
+llrsReceived = return_llrs(equalizedSymbols, hestAggregate, noiseVariances)[:-numZerosAppend]
+llrsReceived = np.reshape(llrsReceived, (-1, 2 * ldpcCoder.K))
+outputData = []
+for block in llrsReceived[:len(llrsReceived)]:
+    ldpcDecode, _ = ldpcCoder.decode(block, 'sumprod2')
+    np.place(ldpcDecode, ldpcDecode>0, int(0))
+    np.place(ldpcDecode, ldpcDecode<0, int(1))
+    outputData.append(ldpcDecode[0:324])
+outputData = np.array(outputData).ravel()
 
-dataToCsv = outputData.ravel()[:len(ba)]
-ber = calculateBER(ba, dataToCsv)
+#for qpsk, hard in zip(equalizedSymbols[0:400], hardDecision[0:400]):
+#    plt.plot([qpsk.real, hard.real], [qpsk.imag, hard.imag], 'b-o');
+#    #plt.plot(hardDecision[0:400].real, hardDecision[0:400].imag, 'ro')
+#plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Demodulated Constellation');
+#plt.show()
+
+#np.save("image_decode_test.npy", np.asarray(outputData))
+dataToCsv = outputData.astype(int).ravel()[:lenData]
+ber = calculateBER(imageData, dataToCsv)
 print("Bit Error Rate:" + str(ber))
 byte_array = []
 for i in range (len(dataToCsv)//8):

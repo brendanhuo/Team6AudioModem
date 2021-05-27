@@ -80,7 +80,7 @@ def channel_estimate_pilot(ofdmReceived, pilotCarriers, pilotValue, N):
     #plt.plot(hestPhase)
     #plt.title('No unwrap')
     #plt.figure(2)
-    #plt.plot(np.unwrap(4 * hestPhase) / 4)
+    #plt.plot(np.unwrap(hestPhase))
     #plt.title('With unwrap')
     #plt.show()
     return hest
@@ -108,7 +108,7 @@ def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotV
         data_equalized = data/Hest
         dataArrayEqualized.append(data_equalized[0:K][dataCarriers])
 
-        HestAggregate.append(Hest[1:K][dataCarriers-1])
+        HestAggregate.append(Hest[0:K][dataCarriers])
 
     return np.array(dataArrayEqualized).ravel(), np.array(HestAggregate).ravel()
 
