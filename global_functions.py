@@ -75,7 +75,7 @@ def decode_and_compare_text(y, x, plot=True, maximum_likelihood_estimation = Tru
             ofdmBlockEnd = positionChirpEnd + (N + CP) * blockNum
             dataEnd = ofdmBlockEnd + 4 * (N + CP)  # 4 is the number of data OFDM blocks we are sending, should be determined by metadata
 
-            hest = channel_estimate_known_ofdm(receivedSound[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
+            hest, _ = channel_estimate_known_ofdm(receivedSound[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
             hest_chirp = Hest_from_chirp(y, plot=False, bias=bias)
             hest_chirp = hest_chirp / np.linalg.norm(hest_chirp)
 
@@ -144,7 +144,7 @@ def decode_and_compare_text(y, x, plot=True, maximum_likelihood_estimation = Tru
         ofdmBlockEnd = positionChirpEnd + (N + CP) * blockNum
         dataEnd = ofdmBlockEnd + 4 * (N + CP)  # 4 is the number of data OFDM blocks we are sending, should be determined by metadata
 
-        hest = channel_estimate_known_ofdm(receivedSound[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
+        hest, _ = channel_estimate_known_ofdm(receivedSound[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
 
         # Combine with chirp estimation
         hest = hest / np.linalg.norm(hest)
@@ -174,7 +174,7 @@ def decode_and_compare_text(y, x, plot=True, maximum_likelihood_estimation = Tru
         ofdmBlockEnd = positionChirpEnd + (N + CP) * blockNum
         dataEnd = ofdmBlockEnd + 4 * (N + CP)  # 4 is the number of data OFDM blocks we are sending, should be determined by metadata
 
-        hest = channel_estimate_known_ofdm(receivedSound[positionChirpEnd: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
+        hest, _ = channel_estimate_known_ofdm(receivedSound[positionChirpEnd: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
 
         # Combine with chirp estimation
         hest = hest / np.linalg.norm(hest)

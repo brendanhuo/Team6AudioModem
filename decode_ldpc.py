@@ -14,6 +14,9 @@ ba = bitarray.bitarray()
 ba.frombytes(contents.encode('utf-8'))
 ba = np.array(ba.tolist())
 
+actualData = ba
+lenData = len(ba)
+
 dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = False)
 
 # LDPC encoding
@@ -47,7 +50,24 @@ ofdmBlockStart = positionChirpEnd
 ofdmBlockEnd = positionChirpEnd + (N + CP) * blockNum
 dataEnd = ofdmBlockEnd + numOFDMblocks * (N + CP) # 4 is the number of data OFDM blocks we are sending, should be determined by metadata
 
-hest = channel_estimate_known_ofdm(receivedSound[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
+hest, offset = channel_estimate_known_ofdm(receivedSound[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
+plt.semilogy(np.arange(N), abs(hest), label='Estimated H via known OFDM')
+plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
+plt.show()
+
+hestImpulse = np.fft.ifft(hest)[0:N//2]
+plt.plot(np.arange(N//2), hestImpulse[0:N//2])
+plt.title('Impulse response')
+plt.show()
+
+print(offset)
+ofdmBlockStart = positionChirpEnd + floor(offset) 
+ofdmBlockEnd = positionChirpEnd  + (N + CP) * blockNum + floor(offset) 
+dataEnd = ofdmBlockEnd + numOFDMblocks * (N + CP) # 4 is the number of data OFDM blocks we are sending, should be determined by metadata
+
+offset = offset - floor(offset)
+
+hest, offsets = channel_estimate_known_ofdm(receivedSound[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
 plt.semilogy(np.arange(N), abs(hest), label='Estimated H via known OFDM')
 plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
 plt.show()
@@ -59,22 +79,22 @@ plt.show()
 
 # Decode using LDPC
 
-equalizedSymbols, hestAggregate = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance = 0.5, pilotValues = True)
+equalizedSymbols, hestAggregate = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, offset = offset, offsets = [0,0,0], samplingMismatch = 0, pilotImportance = 0.5, pilotValues = True)
 
 # Noise variances that are estimated - real part and imaginary part - may want to refine later
 noiseVariances = [1, 1]
 llrsReceived = return_llrs(equalizedSymbols, hestAggregate, noiseVariances)[:-numZerosAppend]
 llrsReceived = np.reshape(llrsReceived, (-1, 2 * ldpcCoder.K))
-outputData = []
+fullOutputData = []
 for block in llrsReceived:
-    ldpcDecode, _ = ldpcCoder.decode(block)
-    outputData.append(ldpcDecode)
-outputData = np.array(outputData).ravel()
-np.place(outputData, outputData>0, int(0))
-np.place(outputData, outputData<0, int(1))
+    outputData, _ = ldpcCoder.decode(block)
+    np.place(outputData, outputData>0, int(0))
+    np.place(outputData, outputData<0, int(1))
+    fullOutputData.append(outputData[0:ldpcBlockLength])
+outputData = np.array(fullOutputData).ravel()
 
-dataToCsv = np.array(outputData, dtype=int)
+dataToCsv = np.array(outputData, dtype=int)[:lenData]
 demodulatedOutput = ''.join(str(e) for e in dataToCsv)
 print(text_from_bits(demodulatedOutput))
-ber = calculateBER(ba, dataToCsv)
+ber = calculateBER(actualData, dataToCsv)
 print("Bit Error Rate:" + str(ber))

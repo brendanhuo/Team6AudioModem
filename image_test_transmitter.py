@@ -82,7 +82,7 @@ HChannel = np.fft.fft(channelResponse, N)
 # Channel Estimation Test
 
 knownOFDMBlockReceived = channel(knownOFDMBlock, channelResponse, noiseSNR)
-hestAtSymbols = channel_estimate_known_ofdm(knownOFDMBlockReceived, seedStart, mappingTable, N, K, CP, mu)
+hestAtSymbols, _ = channel_estimate_known_ofdm(knownOFDMBlockReceived, seedStart, mappingTable, N, K, CP, mu)
 
 plt.semilogy(np.arange(N), HChannel, label = 'actual H')
 plt.semilogy(np.arange(N), abs(hestAtSymbols), label='Estimated H')
@@ -97,7 +97,7 @@ ofdmBlockStart = positionChirpEnd
 ofdmBlockEnd = positionChirpEnd + (N + CP) * blockNum
 dataEnd = ofdmBlockEnd + numOFDMblocks * (N + CP) 
 
-hest = channel_estimate_known_ofdm(ofdmReceived[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
+hest, _ = channel_estimate_known_ofdm(ofdmReceived[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
 plt.semilogy(np.arange(N), HChannel, label = 'actual H')
 plt.semilogy(np.arange(N), abs(hest), label='Estimated H')
 plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
@@ -106,7 +106,7 @@ plt.show()
 plt.plot(ofdmReceived[ofdmBlockEnd:])
 plt.show()
 
-equalizedSymbols, hestAggregate = map_to_decode(ofdmReceived[ofdmBlockEnd:], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance, pilotValues)
+equalizedSymbols, hestAggregate = map_to_decode(ofdmReceived[ofdmBlockEnd:], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, offsets = [0,0,0], samplingMismatch = 0, pilotImportance = 0.5, pilotValues=True)
 outputData, hardDecision = demapping(equalizedSymbols, demappingTable)
 
 print(len(equalizedSymbols))

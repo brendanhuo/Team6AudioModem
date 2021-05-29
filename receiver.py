@@ -11,7 +11,9 @@ from transmitter import *
 from chirp import *
 from numpy.random import default_rng
 from scipy import signal
-
+from sklearn.linear_model import LinearRegression
+from math import floor
+from scipy.signal import savgol_filter
 
 def removeCP(signal, CP, N):
     """Removes cyclic prefix"""
@@ -30,13 +32,46 @@ def remove_zeros(position, data):
 
     return data[position:]
 
+def get_channel_offset(unwrapped_angle):
+    
+    y = unwrapped_angle
+    x = np.arange(len(y))
+    
+    model = LinearRegression().fit(x[:, np.newaxis], y)
+    y_fit = model.predict(x[:, np.newaxis])
+    
+    slope = model.coef_[0]
+    #yhat = savgol_filter(y, 31, 1) # window size 11, polynomial order 1
+    #plt.plot(y)
+    #plt.plot(y_fit)
+    #plt.plot(yhat)
+    #plt.plot(np.diff(yhat))
+    #plt.show()
+    return -slope * N / 2 / np.pi, y_fit
+
+def get_continue_seq(str_list):
+    ls = str_list
+    len_ls = len(ls)
+    index_count = {}
+    for x in range(len_ls):
+        key = index_count.keys()
+        if key:
+            diff_x1 = ls[x]-ls[x-1]
+            if diff_x1==1:
+                index_count[max(key)].append(ls[x])
+            else:
+                index_count[x] = [ls[x]]
+        else:
+            index_count[x] = [ls[x]]
+    res = index_count[max(index_count, key=lambda x: len(index_count[x]))]
+    return res
 
 def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N, K, CP, mu):
     """Channel estimate using known OFDM block symbols"""
 
     numberOfBlocks = len(knownOFDMBlock) // (N+CP)
     hestAtSymbols = np.zeros(N, dtype = complex) # estimate of the channel gain at particular frequency bins
-
+    offsets = []
     for i in range(numberOfBlocks):
         # Retrace back the original seed
         rng = default_rng(randomSeedStart + i)
@@ -56,9 +91,34 @@ def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N
             else:
                 div = (receivedSymbols[j]/expectedSymbols[j])
                 hestAtSymbols[j] = (hestAtSymbols[j] * i + div) / (i + 1) # Average over past OFDM blocks
-            
-    return hestAtSymbols
+                #hestAtSymbols[j] = div
+        #offsets.append(get_channel_offset(np.unwrap(np.angle(hestAtSymbols)))[0])
+    yhat = savgol_filter(np.unwrap(np.angle(hestAtSymbols)), 31, 1) # window size 11, polynomial order 1
+    #second_deriv = np.gradient(np.gradient(np.unwrap(np.angle(hestAtSymbols))[0:N//2]))
+    second_deriv = np.gradient(np.gradient(yhat[0:N//2]))
+    boundary = np.mean(abs(second_deriv))
+    goodFrequencies = []
+    for i in range(len(second_deriv)):
+        if abs(second_deriv[i]) <= boundary:
+            goodFrequencies.append(i)
+    best_sequence = get_continue_seq(goodFrequencies)
+    #unwrapped_angle = np.unwrap(np.angle(hestAtSymbols))
+    unwrapped_angle = yhat
+    offset, y_fit = get_channel_offset(unwrapped_angle[best_sequence])
+    plt.plot(unwrapped_angle[best_sequence], label = 'unwrapped angle at straight section')
+    plt.plot(y_fit, label = 'linear regression')
+    plt.legend()
+    plt.show()
 
+    plt.plot(np.unwrap(np.angle(hestAtSymbols)), label = 'Hest')
+    #plt.plot(np.gradient(np.unwrap(np.angle(hestAtSymbols))), label = 'first deriv')
+    #plt.plot(second_deriv, label = 'second deriv')
+    #plt.hlines(boundary, xmin = 0, xmax = 8000, label = 'boundary')
+    plt.legend()
+    plt.show()
+    if len(best_sequence) <= 30:
+        return hestAtSymbols, 0
+    return hestAtSymbols, offset
 
 def channel_estimate_pilot(ofdmReceived, pilotCarriers, pilotValue, N):
     """Performs channel estimation using pilot values"""
@@ -86,7 +146,7 @@ def channel_estimate_pilot(ofdmReceived, pilotCarriers, pilotValue, N):
     return hest
 
 
-def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance = 0, pilotValues = True):
+def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotValue, offset, offsets, samplingMismatch, pilotImportance = 0, pilotValues = True):
     """Builds demodulated constellation symbol from OFDM symbols"""
 
     dataArrayEqualized = []
@@ -94,11 +154,21 @@ def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotV
     np.save("testing_angles.npy", np.asarray(np.angle(Hest)))
     HestAggregate = []
 
+    offset_old = floor(np.mean(offsets))
+    remainingDifference = np.mean(offsets) - offset_old
+
     for i in range(len(audio)//(N+CP)):
-        data = audio[i*(N+CP): (N+CP)*(i+1)]
+        remainingDifference += i * samplingMismatch
+        if abs(remainingDifference)>=1:
+            data = audio[i*(N+CP)+floor(remainingDifference): (N+CP)*(i+1)+floor(remainingDifference)]
+            remainingDifference = remainingDifference - floor(remainingDifference)
+        else:
+            data = audio[i*(N+CP): (N+CP)*(i+1)]
         data = removeCP(data, CP, N)
         data = DFT(data, N)
-
+        for l in range(len(data)):
+            #data[l] *= cmath.exp(remainingDifference * l * 2 * np.pi/N)
+            data[l] *= cmath.exp(offset * l * 2 * np.pi/N)
         if pilotValues:
             pilotHest = channel_estimate_pilot(data, pilotCarriers, pilotValue, N)
         else:

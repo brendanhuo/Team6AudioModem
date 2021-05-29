@@ -5,6 +5,7 @@ from receiver import *
 from chirp import *
 from channel import * 
 from ldpc_jossy.py import ldpc
+from statistics import mean 
 
 image_path = "./image/autumn.tif"
 ba, image_shape = image2bits(image_path, plot = True)
@@ -41,7 +42,7 @@ ba = np.append(ba, np.zeros(len(dataCarriers)*2 - (len(ba) - len(ba)//mu//len(da
 bitsSP = ba.reshape((len(ba)//mu//len(dataCarriers), len(dataCarriers), mu))
 numOFDMblocks = len(bitsSP)
 
-receivedSound = np.load("audio/image_received_autumn_5_ldpc.npy")
+receivedSound = np.load("audio/image_received_autumn_6_ldpc.npy") #6_ldpc is 4096/256/251
 plt.plot(receivedSound)
 plt.show()
 
@@ -52,7 +53,21 @@ ofdmBlockStart = positionChirpEnd
 ofdmBlockEnd = positionChirpEnd + (N + CP) * blockNum
 dataEnd = ofdmBlockEnd + numOFDMblocks * (N + CP) # 4 is the number of data OFDM blocks we are sending, should be determined by metadata
 
-hest = channel_estimate_known_ofdm(receivedSound[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
+hest, offset = channel_estimate_known_ofdm(receivedSound[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
+plt.semilogy(np.arange(0, fs//2, fs/N), abs(hest[:N//2]), label='Estimated H via known OFDM')
+plt.grid(True); plt.xlabel('Frequency / Hz'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
+plt.show()
+
+hestImpulse = np.fft.ifft(hest)[0:N//2]
+plt.plot(np.arange(N//2), hestImpulse[0:N//2])
+plt.title('Impulse response')
+plt.show()
+print(offset)
+ofdmBlockStart = positionChirpEnd + floor(offset)
+ofdmBlockEnd = positionChirpEnd + (N + CP) * blockNum + floor(offset)
+dataEnd = ofdmBlockEnd + numOFDMblocks * (N + CP) # 4 is the number of data OFDM blocks we are sending, should be determined by metadata
+
+hest, offsets = channel_estimate_known_ofdm(receivedSound[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
 plt.semilogy(np.arange(0, fs//2, fs/N), abs(hest[:N//2]), label='Estimated H via known OFDM')
 plt.grid(True); plt.xlabel('Frequency / Hz'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
 plt.show()
@@ -62,18 +77,25 @@ plt.plot(np.arange(N//2), hestImpulse[0:N//2])
 plt.title('Impulse response')
 plt.show()
 
-equalizedSymbols, hestAggregate = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotImportance = 0.3, pilotValues = True)
+offset = offset - floor(offset)
+#y = offsets
+#x = np.arange(len(y))
+    
+#model = LinearRegression().fit(x[:, np.newaxis], y)
+#samplingMismatch = round(model.coef_[0])
+
+equalizedSymbols, hestAggregate = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, offset = offset, offsets = [0,0,0], samplingMismatch = 0, pilotImportance = 0.5, pilotValues = True)
 outputData, hardDecision = demapping(equalizedSymbols , demappingTable)
 
-noiseVariances = [0.05, 0.05]
+noiseVariances = [1, 1]
 llrsReceived = return_llrs(equalizedSymbols, hestAggregate, noiseVariances)[:-numZerosAppend]
-llrsReceived = np.reshape(llrsReceived[0:3416256], (-1, 2 * ldpcCoder.K))
+llrsReceived = np.reshape(llrsReceived[0:len(llrsReceived)//648*648], (-1, 2 * ldpcCoder.K))
 outputData = []
 for block in llrsReceived[:len(llrsReceived)]:
     ldpcDecode, _ = ldpcCoder.decode(block, 'sumprod2')
     np.place(ldpcDecode, ldpcDecode>0, int(0))
     np.place(ldpcDecode, ldpcDecode<0, int(1))
-    outputData.append(ldpcDecode[0:324])
+    outputData.append(ldpcDecode[0:ldpcBlockLength])
 outputData = np.array(outputData).ravel()
 '''
 z = np.arange(N//2-1)
