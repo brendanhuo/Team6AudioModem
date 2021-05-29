@@ -21,7 +21,7 @@ def assign_data_pilot(K, P, bandLimited = False):
     dataCarriers = np.delete(allCarriers, pilotCarriers)
 
     if bandLimited:
-        dataCarriers = np.delete(dataCarriers, 0)[0:len(dataCarriers)*2//3]
+        dataCarriers = np.delete(dataCarriers, 0)[:len(dataCarriers)*3//4]
     else:
         dataCarriers = np.delete(dataCarriers, 0)
 
@@ -32,10 +32,10 @@ def mapping(bits):
     """ Maps each batch of bits to a constellation symbol"""
 
     mapping_table = {
-        (0,0) : 1+1j,
-        (0,1) : -1+1j,
-        (1,0) : 1-1j,
-        (1,1) : -1-1j
+        (0,0) : (1+1j) / np.sqrt(2),
+        (0,1) : (-1+1j) / np.sqrt(2),
+        (1,0) : (1-1j) / np.sqrt(2),
+        (1,1) : (-1-1j) / np.sqrt(2)
     }
     demapping_table = {v : k for k, v in mapping_table.items()}
 

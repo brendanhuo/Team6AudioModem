@@ -11,7 +11,7 @@ image_path = "./image/autumn.tif"
 ba, image_shape = image2bits(image_path, plot = True)
 imageData = ba
 lenData = len(ba)
-print(lenData)
+print("Length of data:" + str(lenData))
 
 # LDPC encoding
 ldpcCoder = ldpc.code()
@@ -26,7 +26,7 @@ for i in range(len(ba)):
     ldpcConvert.append(encoded)
 
 ba = np.array(ldpcConvert).ravel()
-print(len(ba))
+print("Length in bits after LDPC:" + str(len(ba)))
 
 dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = True)
 
@@ -36,7 +36,7 @@ numZerosAppend = len(dataCarriers)*2 - (len(ba) - len(ba)//mu//len(dataCarriers)
 ba = np.append(ba, np.random.binomial(n=1, p=0.5, size=(numZerosAppend, )))
 bitsSP = ba.reshape((len(ba)//mu//len(dataCarriers), len(dataCarriers), mu))
 numOFDMblocks = len(bitsSP)
-print(numOFDMblocks)
+print("Number of OFDM blocks: " + str(numOFDMblocks))
 
 ba = np.append(ba, np.zeros(len(dataCarriers)*2 - (len(ba) - len(ba)//mu//len(dataCarriers) * len(dataCarriers) * mu)))
 bitsSP = ba.reshape((len(ba)//mu//len(dataCarriers), len(dataCarriers), mu))
@@ -62,7 +62,7 @@ hestImpulse = np.fft.ifft(hest)[0:N//2]
 plt.plot(np.arange(N//2), hestImpulse[0:N//2])
 plt.title('Impulse response')
 plt.show()
-print(offset)
+print("Offset:" + str(offset))
 ofdmBlockStart = positionChirpEnd + floor(offset)
 ofdmBlockEnd = positionChirpEnd + (N + CP) * blockNum + floor(offset)
 dataEnd = ofdmBlockEnd + numOFDMblocks * (N + CP) # 4 is the number of data OFDM blocks we are sending, should be determined by metadata
@@ -85,13 +85,15 @@ offset = offset - floor(offset)
 #samplingMismatch = round(model.coef_[0])
 
 equalizedSymbols, hestAggregate = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, offset = offset, offsets = [0,0,0], samplingMismatch = 0, pilotImportance = 0.5, pilotValues = True)
-outputData, hardDecision = demapping(equalizedSymbols , demappingTable)
+# outputData, hardDecision = demapping(equalizedSymbols , demappingTable)
 
 noiseVariances = [1, 1]
 llrsReceived = return_llrs(equalizedSymbols, hestAggregate, noiseVariances)[:-numZerosAppend]
-llrsReceived = np.reshape(llrsReceived[0:len(llrsReceived)//648*648], (-1, 2 * ldpcCoder.K))
+llrsReceived = np.reshape(llrsReceived[0:len(llrsReceived)//(2 * ldpcCoder.K) * (2 * ldpcCoder.K)], (-1, 2 * ldpcCoder.K))
+print("Length of LLR: " + str(len(llrsReceived)))
 outputData = []
-for block in llrsReceived[:len(llrsReceived)]:
+
+for block in llrsReceived:
     ldpcDecode, _ = ldpcCoder.decode(block, 'sumprod2')
     np.place(ldpcDecode, ldpcDecode>0, int(0))
     np.place(ldpcDecode, ldpcDecode<0, int(1))

@@ -41,13 +41,16 @@ def get_channel_offset(unwrapped_angle):
     y_fit = model.predict(x[:, np.newaxis])
     
     slope = model.coef_[0]
+
     #yhat = savgol_filter(y, 31, 1) # window size 11, polynomial order 1
     #plt.plot(y)
     #plt.plot(y_fit)
     #plt.plot(yhat)
     #plt.plot(np.diff(yhat))
     #plt.show()
+
     return -slope * N / 2 / np.pi, y_fit
+
 
 def get_continue_seq(str_list):
     ls = str_list
@@ -66,7 +69,7 @@ def get_continue_seq(str_list):
     res = index_count[max(index_count, key=lambda x: len(index_count[x]))]
     return res
 
-def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N, K, CP, mu):
+def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N, K, CP, mu, plot=False):
     """Channel estimate using known OFDM block symbols"""
 
     numberOfBlocks = len(knownOFDMBlock) // (N+CP)
@@ -84,17 +87,18 @@ def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N
         receivedSymbols = removeCP(receivedSymbols, CP, N)
         receivedSymbols = DFT(receivedSymbols, N)
 
-        # hestAtSymbols = (hestAtSymbols * i + (receivedSymbols / expectedSymbols)) / (i + 1) # Averaging over past OFDM blocks
         for j in range(N):
             if j == N//2 or j == 0:
                 hestAtSymbols[j] = 0
             else:
                 div = (receivedSymbols[j]/expectedSymbols[j])
                 hestAtSymbols[j] = (hestAtSymbols[j] * i + div) / (i + 1) # Average over past OFDM blocks
-                #hestAtSymbols[j] = div
-        #offsets.append(get_channel_offset(np.unwrap(np.angle(hestAtSymbols)))[0])
+
+    # Process below to find the whole number of samples off during synchronization
+    # First apply filter to the unwrapped angles 
     yhat = savgol_filter(np.unwrap(np.angle(hestAtSymbols)), 31, 1) # window size 11, polynomial order 1
-    #second_deriv = np.gradient(np.gradient(np.unwrap(np.angle(hestAtSymbols))[0:N//2]))
+
+    # Process below to filter out the noisy phase signals to find the best continuous sequence to estimate the phase gradient
     second_deriv = np.gradient(np.gradient(yhat[0:N//2]))
     boundary = np.mean(abs(second_deriv))
     goodFrequencies = []
@@ -102,22 +106,24 @@ def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N
         if abs(second_deriv[i]) <= boundary:
             goodFrequencies.append(i)
     best_sequence = get_continue_seq(goodFrequencies)
-    #unwrapped_angle = np.unwrap(np.angle(hestAtSymbols))
+
+    # Obtain the phase gradient from the channel measurements and hence the nubmer of samples off to resynchronize
     unwrapped_angle = yhat
     offset, y_fit = get_channel_offset(unwrapped_angle[best_sequence])
-    plt.plot(unwrapped_angle[best_sequence], label = 'unwrapped angle at straight section')
-    plt.plot(y_fit, label = 'linear regression')
-    plt.legend()
-    plt.show()
 
-    plt.plot(np.unwrap(np.angle(hestAtSymbols)), label = 'Hest')
-    #plt.plot(np.gradient(np.unwrap(np.angle(hestAtSymbols))), label = 'first deriv')
-    #plt.plot(second_deriv, label = 'second deriv')
-    #plt.hlines(boundary, xmin = 0, xmax = 8000, label = 'boundary')
-    plt.legend()
-    plt.show()
+    if plot:
+        plt.plot(unwrapped_angle[best_sequence], label = 'unwrapped angle at straight section')
+        plt.plot(y_fit, label = 'linear regression')
+        plt.legend()
+        plt.show()
+
+        plt.plot(np.unwrap(np.angle(hestAtSymbols)), label = 'Hest')
+        plt.legend()
+        plt.show()
+    
     if len(best_sequence) <= 30:
         return hestAtSymbols, 0
+
     return hestAtSymbols, offset
 
 def channel_estimate_pilot(ofdmReceived, pilotCarriers, pilotValue, N):
@@ -151,7 +157,7 @@ def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotV
 
     dataArrayEqualized = []
     Hest = channelH
-    np.save("testing_angles.npy", np.asarray(np.angle(Hest)))
+    # np.save("testing_angles.npy", np.asarray(np.angle(Hest)))
     HestAggregate = []
 
     offset_old = floor(np.mean(offsets))
@@ -291,8 +297,8 @@ def return_llrs(receivedSymbols, channelEstimates, noiseSigma):
     receivedSymbolsReal = receivedSymbols.real
     receivedSymbolsImag = receivedSymbols.imag
 
-    llrsFirstBit = channelEstimateMagnitudes * receivedSymbolsImag / varianceImag # Right now, constellations not normalized so have to add in sqrt(2) later
-    llrsSecondBit = channelEstimateMagnitudes * receivedSymbolsReal / varianceReal
+    llrsFirstBit = channelEstimateMagnitudes * receivedSymbolsImag * np.sqrt(2) / varianceImag # Right now, constellations not normalized so have to add in sqrt(2) later
+    llrsSecondBit = channelEstimateMagnitudes * receivedSymbolsReal * np.sqrt(2) / varianceReal
     
 
     llrs = np.empty((llrsFirstBit.size + llrsSecondBit.size,), dtype=llrsFirstBit.dtype)
