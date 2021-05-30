@@ -12,12 +12,14 @@ dataCarriers, pilotCarriers = assign_data_pilot(K, P)
 ### TRANSMITTER ###
 
 # Import text file for testing
-with open("./text/lorem.txt") as f:
+with open("./text/asyoulik.txt") as f:
     contents = f.read()
+    contents = contents[:len(contents)//2]
 
 ba = bitarray.bitarray()
 ba.frombytes(contents.encode('utf-8'))
 ba = np.array(ba.tolist())
+actualData = ba
 
 lenData = len(ba)
 
@@ -62,7 +64,7 @@ plt.plot(dataTotal)
 plt.title("Signal to send"); plt.xlabel('Sample number'); plt.ylabel('Sound amplitude');
 plt.show()
 
-# write("audio/chirp_chain.wav", fs, dataTotal)
+write("audio/exp_sounds/asyoulikeit_1.wav", fs, dataTotal)
 
 ### CHANNEL ###
 
@@ -77,7 +79,7 @@ HChannel = np.fft.fft(channelResponse, N)
 # Channel Estimation Test
 
 knownOFDMBlockReceived = channel(knownOFDMBlock, channelResponse, noiseSNR)
-hestAtSymbols = channel_estimate_known_ofdm(knownOFDMBlockReceived, seedStart, mappingTable, N, K, CP, mu)
+hestAtSymbols, _ = channel_estimate_known_ofdm(knownOFDMBlockReceived, seedStart, mappingTable, N, K, CP, mu)
 
 plt.plot(np.arange(N), HChannel, label = 'actual H')
 plt.plot(np.arange(N), abs(hestAtSymbols), label='Estimated H')
@@ -91,7 +93,7 @@ positionChirpEnd = chirp_synchroniser(ofdmReceived)
 ofdmBlockStart = positionChirpEnd
 ofdmBlockEnd = positionChirpEnd + (N + CP) * blockNum
 
-hest = channel_estimate_known_ofdm(ofdmReceived[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
+hest, offset = channel_estimate_known_ofdm(ofdmReceived[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
 plt.plot(np.arange(N), HChannel, label = 'actual H')
 plt.plot(np.arange(N), abs(hest), label='Estimated H')
 plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
@@ -100,16 +102,17 @@ plt.show()
 # plt.plot(ofdmReceived[ofdmBlockEnd:])
 # plt.show()
 
-equalizedSymbols, hestAggregate = map_to_decode(ofdmReceived[ofdmBlockEnd:], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, pilotValues = False)
+equalizedSymbols, hestAggregate = map_to_decode(ofdmReceived[ofdmBlockEnd:], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, offset=offset, offsets=[0,0,0], samplingMismatch = 0, pilotValues = False)
 
 # Noise variances shown for now
 noiseVariances = [0.01, 0.01]
 llrsReceived = return_llrs(equalizedSymbols, hestAggregate, noiseVariances)[:-numZerosAppend]
-llrsReceived = np.reshape(llrsReceived, (-1, 2 * ldpcCoder.K))
+llrsReceived = np.reshape(llrsReceived[0:len(llrsReceived)//(2 * ldpcCoder.K) * (2 * ldpcCoder.K)], (-1, 2 * ldpcCoder.K))
 outputData = []
 for block in llrsReceived:
     ldpcDecode, _ = ldpcCoder.decode(block)
-    outputData.append(ldpcDecode)
+    # outputData.append(ldpcDecode)
+    outputData.append(ldpcDecode[0:ldpcBlockLength])
 outputData = np.array(outputData).ravel()
 np.place(outputData, outputData>0, int(0))
 np.place(outputData, outputData<0, int(1))
@@ -126,5 +129,5 @@ dataToCsv = np.array(outputData, dtype=int)[:lenData]
 demodulatedOutput = ''.join(str(e) for e in dataToCsv)
 print(text_from_bits(demodulatedOutput))
 
-ber = calculateBER(ba, dataToCsv)
+ber = calculateBER(actualData, dataToCsv)
 print("BER: " + str(ber))

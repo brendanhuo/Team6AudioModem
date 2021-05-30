@@ -16,10 +16,10 @@ from scipy import signal
 
 
 # OFDM
-N = 4096 # DFT size
+N = 2048 # DFT size
 K = N//2 # number of OFDM subcarriers with information
 CP = K//8  # length of the cyclic prefix
-P = 251 # number of pilot carriers per OFDM block (cannot be a multiple of 2 for some reason)
+P = 129 # number of pilot carriers per OFDM block (cannot be a multiple of 2 for some reason)
 pilotValue = 1+1j # The known value each pilot transmits
 
 # QPSK
