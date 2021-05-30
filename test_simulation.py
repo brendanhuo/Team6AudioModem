@@ -7,14 +7,14 @@ from channel import *
 from audio_utils import *
 from ldpc_jossy.py import ldpc
 
-dataCarriers, pilotCarriers = assign_data_pilot(K, P)
+dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = True)
 
 ### TRANSMITTER ###
 
 # Import text file for testing
 with open("./text/asyoulik.txt") as f:
     contents = f.read()
-    contents = contents[:len(contents)//2]
+    contents = contents[:len(contents)//4]
 
 ba = bitarray.bitarray()
 ba.frombytes(contents.encode('utf-8'))
@@ -43,6 +43,8 @@ numZerosAppend = len(dataCarriers)*2 - (len(ba) - len(ba)//mu//len(dataCarriers)
 ba = np.append(ba, np.random.binomial(n=1, p=0.5, size=(numZerosAppend, )))
 bitsSP = ba.reshape((len(ba)//mu//len(dataCarriers), len(dataCarriers), mu))
 
+numDataBlocks = len(bitsSP)
+
 # Chirp 
 exponentialChirp = exponential_chirp()
 # exponentialChirp = exponential_chirp_chain()
@@ -57,14 +59,21 @@ knownOFDMBlock = known_ofdm_block(blockNum, seedStart, mu, K, CP, mappingTable)
 # Total data sent over channel
 # dataTotal = np.concatenate((np.zeros(fs), exponentialChirp.ravel(), (np.zeros(fs * time_before_data)), knownOFDMBlock, sound))
 dataTotal = np.concatenate((np.zeros(fs), exponentialChirp.ravel(), knownOFDMBlock, sound, np.zeros(fs)))
+'''
+dataTotal = np.concatenate((np.zeros(fs), exponentialChirp.ravel(), knownOFDMBlock))
 
+for i in range(numDataBlocks//5):
+    dataTotal = np.concatenate(dataTotal, sound[i*(N+CP):(i+5)*(N+CP)], known_ofdm_block(1, seedStart, mu, K, CP, mappingTable))
+
+dataTotal = np.concatenate(dataTotal, sound[975*(N+CP):980*(N+CP)])
+'''
 # save(dataTotal, "audio/text_ldpc_1.wav")
 
 plt.plot(dataTotal)
 plt.title("Signal to send"); plt.xlabel('Sample number'); plt.ylabel('Sound amplitude');
 plt.show()
 
-write("audio/exp_sounds/asyoulikeit_1.wav", fs, dataTotal)
+#write("audio/exp_sounds/asyoulikeit_251_4_bandlimit_withknown.wav", fs, dataTotal)
 
 ### CHANNEL ###
 
@@ -86,23 +95,25 @@ plt.plot(np.arange(N), abs(hestAtSymbols), label='Estimated H')
 plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
 plt.show()
 
+
 # Symbol Recovery Test
 positionChirpEnd = chirp_synchroniser(ofdmReceived)
 
 # OFDM block channel estimation
-ofdmBlockStart = positionChirpEnd
-ofdmBlockEnd = positionChirpEnd + (N + CP) * blockNum
+ofdmBlockStart = positionChirpEnd 
+ofdmBlockEnd = positionChirpEnd + (N + CP) * blockNum 
 
-hest, offset = channel_estimate_known_ofdm(ofdmReceived[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
+hest, offsetsss = channel_estimate_known_ofdm(ofdmReceived[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
 plt.plot(np.arange(N), HChannel, label = 'actual H')
 plt.plot(np.arange(N), abs(hest), label='Estimated H')
 plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
 plt.show()
 
+print(offsetsss)
 # plt.plot(ofdmReceived[ofdmBlockEnd:])
 # plt.show()
 
-equalizedSymbols, hestAggregate = map_to_decode(ofdmReceived[ofdmBlockEnd:], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, offset=offset, offsets=[0,0,0], samplingMismatch = 0, pilotValues = False)
+equalizedSymbols, hestAggregate = map_to_decode(ofdmReceived[ofdmBlockEnd:], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, offset=0, offsets=[0,0,0], samplingMismatch = 0.001, pilotImportance = 0, pilotValues = True)
 
 # Noise variances shown for now
 noiseVariances = [0.01, 0.01]

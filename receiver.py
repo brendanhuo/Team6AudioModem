@@ -69,7 +69,7 @@ def get_continue_seq(str_list):
     res = index_count[max(index_count, key=lambda x: len(index_count[x]))]
     return res
 
-def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N, K, CP, mu, plot=False):
+def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N, K, CP, mu, plot=True):
     """Channel estimate using known OFDM block symbols"""
 
     numberOfBlocks = len(knownOFDMBlock) // (N+CP)
@@ -115,7 +115,7 @@ def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N
         plt.plot(unwrapped_angle[best_sequence], label = 'unwrapped angle at straight section')
         plt.plot(y_fit, label = 'linear regression')
         plt.legend()
-        plt.show()
+        #plt.show()
 
         plt.plot(np.unwrap(np.angle(hestAtSymbols)), label = 'Hest')
         plt.legend()
@@ -139,7 +139,7 @@ def channel_estimate_pilot(ofdmReceived, pilotCarriers, pilotValue, N):
     # of the channel in the data carriers. Here, we interpolate absolute value and phase 
     # separately
     hestAbs = scipy.interpolate.interp1d(np.append(pilotCarriers, N - pilotCarriers).ravel(), abs(hestAtPilots), kind='cubic', fill_value="extrapolate")(np.arange(N))
-    hestPhase = scipy.interpolate.interp1d(np.append(pilotCarriers, N - pilotCarriers).ravel(), np.angle(hestAtPilots), kind='cubic', fill_value="extrapolate")(np.arange(N))
+    hestPhase = scipy.interpolate.interp1d(np.append(pilotCarriers, N - pilotCarriers).ravel(), np.angle(hestAtPilots), kind='linear', fill_value="extrapolate")(np.arange(N))
     hest = hestAbs * np.exp(1j*hestPhase)
 
     #plt.figure(1)
@@ -149,7 +149,25 @@ def channel_estimate_pilot(ofdmReceived, pilotCarriers, pilotValue, N):
     #plt.plot(np.unwrap(hestPhase))
     #plt.title('With unwrap')
     #plt.show()
-    return hest
+
+    # Process below to find the whole number of samples off during synchronization
+    # First apply filter to the unwrapped angles 
+    yhat = savgol_filter(np.unwrap(np.angle(hest)), 31, 1) # window size 11, polynomial order 1
+
+    # Process below to filter out the noisy phase signals to find the best continuous sequence to estimate the phase gradient
+    second_deriv = np.gradient(np.gradient(yhat[0:N//2]))
+    boundary = np.mean(abs(second_deriv))
+    goodFrequencies = []
+    for i in range(len(second_deriv)):
+        if abs(second_deriv[i]) <= boundary:
+            goodFrequencies.append(i)
+    best_sequence = get_continue_seq(goodFrequencies)
+
+    # Obtain the phase gradient from the channel measurements and hence the nubmer of samples off to resynchronize
+    unwrapped_angle = yhat
+    offset, y_fit = get_channel_offset(unwrapped_angle[best_sequence])
+
+    return hest, offset
 
 
 def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotValue, offset, offsets, samplingMismatch, pilotImportance = 0, pilotValues = True):
@@ -161,31 +179,44 @@ def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotV
     HestAggregate = []
 
     offset_old = floor(np.mean(offsets))
-    remainingDifference = np.mean(offsets) - offset_old
-
+    remainingDifference = offset - offset_old
+    pilotOffsets = []
     for i in range(len(audio)//(N+CP)):
         remainingDifference += i * samplingMismatch
         if abs(remainingDifference)>=1:
             data = audio[i*(N+CP)+floor(remainingDifference): (N+CP)*(i+1)+floor(remainingDifference)]
-            remainingDifference = remainingDifference - floor(remainingDifference)
+            toRotate = remainingDifference - floor(remainingDifference)
         else:
             data = audio[i*(N+CP): (N+CP)*(i+1)]
+            toRotate = remainingDifference
         data = removeCP(data, CP, N)
         data = DFT(data, N)
         for l in range(len(data)):
             #data[l] *= cmath.exp(remainingDifference * l * 2 * np.pi/N)
-            data[l] *= cmath.exp(offset * l * 2 * np.pi/N)
+            data[l] *= cmath.exp(toRotate * l * 2 * np.pi/N)
+        '''
+        data_equalized = data/Hest
         if pilotValues:
-            pilotHest = channel_estimate_pilot(data, pilotCarriers, pilotValue, N)
+            pilotHest, pilotOffset = channel_estimate_pilot(data_equalized, pilotCarriers, pilotValue, N)
+            pilotOffsets.append(pilotOffset)
         else:
             pilotHest = 0
-        # Hest = channelEstimate(data)
+        '''
+        if pilotValues:
+            pilotHest, pilotOffset = channel_estimate_pilot(data, pilotCarriers, pilotValue, N)
+            pilotOffsets.append(pilotOffset)
+        else:
+            pilotHest = 0
         Hest = (1-pilotImportance) * Hest + pilotImportance*pilotHest
+        
         data_equalized = data/Hest
         dataArrayEqualized.append(data_equalized[0:K][dataCarriers])
-
+        if i == 50 or i == 400:
+            plt.plot(np.angle(Hest))
+            plt.show()
         HestAggregate.append(Hest[0:K][dataCarriers])
-
+    plt.plot(pilotOffsets)
+    plt.show()
     return np.array(dataArrayEqualized).ravel(), np.array(HestAggregate).ravel()
 
 

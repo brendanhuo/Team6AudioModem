@@ -7,8 +7,9 @@ from channel import *
 from ldpc_jossy.py import ldpc
 
 # Import text file for testing
-with open("./text/lorem.txt") as f:
+with open("./text/asyoulik.txt") as f:
     contents = f.read()
+    contents = contents[:len(contents)//2]
 
 ba = bitarray.bitarray()
 ba.frombytes(contents.encode('utf-8'))
@@ -17,7 +18,7 @@ ba = np.array(ba.tolist())
 actualData = ba
 lenData = len(ba)
 
-dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = False)
+dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = True)
 
 # LDPC encoding
 
@@ -39,7 +40,7 @@ ba = np.append(ba, np.zeros(numZerosAppend))
 bitsSP = ba.reshape((len(ba)//mu//len(dataCarriers), len(dataCarriers), mu))
 numOFDMblocks = len(bitsSP)
 
-receivedSound = np.load("audio/text_ldpc_received_1.npy")
+receivedSound = np.load("audio/brendan/asyoulikeit-rec3_251_bandlimit.npy")
 plt.plot(receivedSound)
 plt.show()
 
@@ -79,12 +80,12 @@ plt.show()
 
 # Decode using LDPC
 
-equalizedSymbols, hestAggregate = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, offset = offset, offsets = [0,0,0], samplingMismatch = 0, pilotImportance = 0.5, pilotValues = True)
+equalizedSymbols, hestAggregate = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, offset = offset, offsets = [0,0,0], samplingMismatch = -0.00012, pilotImportance = 0.5, pilotValues = True)
 
 # Noise variances that are estimated - real part and imaginary part - may want to refine later
 noiseVariances = [1, 1]
 llrsReceived = return_llrs(equalizedSymbols, hestAggregate, noiseVariances)[:-numZerosAppend]
-llrsReceived = np.reshape(llrsReceived, (-1, 2 * ldpcCoder.K))
+llrsReceived = np.reshape(llrsReceived[:len(llrsReceived)//648*648], (-1, 2 * ldpcCoder.K))
 fullOutputData = []
 for block in llrsReceived:
     outputData, _ = ldpcCoder.decode(block)

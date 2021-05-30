@@ -21,7 +21,7 @@ def assign_data_pilot(K, P, bandLimited = False):
     dataCarriers = np.delete(allCarriers, pilotCarriers)
 
     if bandLimited:
-        dataCarriers = np.delete(dataCarriers, 0)[:len(dataCarriers)*3//4]
+        dataCarriers = np.delete(dataCarriers, 0)[:len(dataCarriers)*2//3]
     else:
         dataCarriers = np.delete(dataCarriers, 0)
 
