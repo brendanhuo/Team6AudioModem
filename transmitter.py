@@ -8,7 +8,7 @@ import soundfile as sf
 import math, cmath
 from scipy.io.wavfile import write
 from numpy.random import default_rng
-
+from globals import *
 
 def assign_data_pilot(K, P, bandLimited = False):
     """ Define the data carriers and pilot tone carriers
@@ -21,7 +21,7 @@ def assign_data_pilot(K, P, bandLimited = False):
     dataCarriers = np.delete(allCarriers, pilotCarriers)
 
     if bandLimited:
-        dataCarriers = np.delete(dataCarriers, 0)[:len(dataCarriers)*2//3]
+        dataCarriers = np.delete(dataCarriers, 0)[:len(dataCarriers)*3//5]
     else:
         dataCarriers = np.delete(dataCarriers, 0)
 
@@ -45,7 +45,14 @@ def mapping(bits):
 def ofdm_symbol(K, pilotValue, pilotCarriers, dataCarriers, qpskPayload):
     """Assigns pilot values and payload values to OFDM symbol, take reverse complex conjugate and append to end to make signal passband"""
 
-    symbol = np.zeros(K, dtype=complex) # the overall K subcarriers
+    # Rather than use zeros, use random bits to fill space that doesn't have pilots or data payloads
+    randomBits = np.random.binomial(n=1, p=0.5, size=(mu * K, ))
+    randomBits = randomBits.reshape(len(randomBits) // mu, mu)
+    symbol = mapping(randomBits)
+
+    # Original version that only used zeros
+    #symbol = np.zeros(K, dtype=complex) # the overall K subcarriers
+    
     symbol[pilotCarriers] = pilotValue  # allocate the pilot subcarriers 
     symbol[dataCarriers] = qpskPayload  # allocate the data subcarriers
     symbol = np.append(symbol, np.append(0, np.conj(symbol)[:0:-1]))
