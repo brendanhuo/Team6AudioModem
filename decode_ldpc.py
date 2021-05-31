@@ -9,7 +9,7 @@ from ldpc_jossy.py import ldpc
 # Import text file for testing
 with open("./text/asyoulik.txt") as f:
     contents = f.read()
-    contents = contents[:len(contents)//2]
+    contents = contents[:len(contents)//4] # Make sure this is actually the data you sent 
 
 ba = bitarray.bitarray()
 ba.frombytes(contents.encode('utf-8'))
@@ -17,8 +17,8 @@ ba = np.array(ba.tolist())
 
 actualData = ba
 lenData = len(ba)
-
-dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = True)
+print(lenData)
+dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = True) # Make sure to check if you actually sent it as bandlimited
 
 # LDPC encoding
 
@@ -32,18 +32,21 @@ ldpcConvert = []
 for i in range(len(ba)):
     encoded = ldpcCoder.encode(ba[i])
     ldpcConvert.append(encoded)
-
 ba = np.array(ldpcConvert).ravel()
 
+# Pad ba to fill full OFDM blocks - use random data 
 numZerosAppend = len(dataCarriers)*2 - (len(ba) - len(ba)//mu//len(dataCarriers) * len(dataCarriers) * mu)
 ba = np.append(ba, np.zeros(numZerosAppend))
 bitsSP = ba.reshape((len(ba)//mu//len(dataCarriers), len(dataCarriers), mu))
 numOFDMblocks = len(bitsSP)
 
-receivedSound = np.load("audio/brendan/asyoulikeit-rec3_251_bandlimit.npy")
-plt.plot(receivedSound)
+# MAKE SURE THAT THE INPUT HAS GLOBAL VALUES THAT MATCH
+receivedSound = np.load("audio/brendan/asyoulikeit-rec4_125_bandlimit35.npy")
+plt.plot(np.arange(len(receivedSound))/fs, receivedSound)
+plt.title('Received Sound'); plt.xlabel('Time/s'); plt.ylabel('Sound amplitude')
 plt.show()
 
+# Synchronization using chirp
 positionChirpEnd = chirp_synchroniser(receivedSound)
 
 # OFDM block channel estimation
@@ -52,36 +55,45 @@ ofdmBlockEnd = positionChirpEnd + (N + CP) * blockNum
 dataEnd = ofdmBlockEnd + numOFDMblocks * (N + CP) # 4 is the number of data OFDM blocks we are sending, should be determined by metadata
 
 hest, offset = channel_estimate_known_ofdm(receivedSound[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
-plt.semilogy(np.arange(N), abs(hest), label='Estimated H via known OFDM')
-plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
+print('Synchronization offset is: ' + str(offset))
+
+plt.semilogy(np.arange(N)*fs / N, abs(hest))
+plt.grid(True); plt.title('Estimated H via known OFDM'); plt.xlabel('Frequency/Hz'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
 plt.show()
 
 hestImpulse = np.fft.ifft(hest)[0:N//2]
-plt.plot(np.arange(N//2), hestImpulse[0:N//2])
-plt.title('Impulse response')
+plt.plot(np.arange(N//2 )/fs, hestImpulse[0:N//2])
+plt.title('Impulse response'); plt.xlabel('Time / s'); plt.ylabel('Amplitude of impulse response')
 plt.show()
 
-print(offset)
+# Correct for synchronization error
 ofdmBlockStart = positionChirpEnd + floor(offset) 
 ofdmBlockEnd = positionChirpEnd  + (N + CP) * blockNum + floor(offset) 
 dataEnd = ofdmBlockEnd + numOFDMblocks * (N + CP) # 4 is the number of data OFDM blocks we are sending, should be determined by metadata
 
+# Remaining offset to rotate
 offset = offset - floor(offset)
 
-hest, offsets = channel_estimate_known_ofdm(receivedSound[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
-plt.semilogy(np.arange(N), abs(hest), label='Estimated H via known OFDM')
-plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
+# Plot new channel estimates
+hest, offset = channel_estimate_known_ofdm(receivedSound[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
+print('New synchronization offset (for rotation): ' + str(offset))
+
+plt.semilogy(np.arange(N)*fs / N, abs(hest))
+plt.grid(True); plt.title('Estimated H via known OFDM'); plt.xlabel('Frequency/Hz'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
 plt.show()
 
 hestImpulse = np.fft.ifft(hest)[0:N//2]
-plt.plot(np.arange(N//2), hestImpulse[0:N//2])
-plt.title('Impulse response')
+plt.plot(np.arange(N//2)/fs, hestImpulse[0:N//2])
+plt.title('Impulse response'); plt.xlabel('Time / s'); plt.ylabel('Amplitude of impulse response')
 plt.show()
 
+# Calculate sampling mismatch from difference in sampling frequency between speakers and microphone
+sampleMismatch = calculate_sampling_mismatch(receivedSound[ofdmBlockEnd:dataEnd], hest, N, CP, pilotCarriers, pilotValue, offset = offset, plot = True)
+
+# Calculate equalized symbols using pilot tone assisted channel frequency response estimate
+equalizedSymbols, hestAggregate = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, offset = offset, samplingMismatch = sampleMismatch, pilotImportance = 0.5, pilotValues = True)
+
 # Decode using LDPC
-
-equalizedSymbols, hestAggregate = map_to_decode(receivedSound[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, offset = offset, offsets = [0,0,0], samplingMismatch = -0.00012, pilotImportance = 0.5, pilotValues = True)
-
 # Noise variances that are estimated - real part and imaginary part - may want to refine later
 noiseVariances = [1, 1]
 llrsReceived = return_llrs(equalizedSymbols, hestAggregate, noiseVariances)[:-numZerosAppend]
@@ -94,8 +106,11 @@ for block in llrsReceived:
     fullOutputData.append(outputData[0:ldpcBlockLength])
 outputData = np.array(fullOutputData).ravel()
 
+# Bit sequence to text
 dataToCsv = np.array(outputData, dtype=int)[:lenData]
 demodulatedOutput = ''.join(str(e) for e in dataToCsv)
 print(text_from_bits(demodulatedOutput))
+
+# Calculate bit error rate (BER)
 ber = calculateBER(actualData, dataToCsv)
 print("Bit Error Rate:" + str(ber))
