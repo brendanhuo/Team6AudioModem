@@ -22,15 +22,42 @@ CP = K//4  # length of the cyclic prefix
 P = 125 # number of pilot carriers per OFDM block (cannot be a multiple of 2 for some reason)
 pilotValue = (1+1j)/np.sqrt(2) # The known value each pilot transmits
 
+QPSK = True
+QAM = False
+
 # QPSK
-mu = 2 # bits per symbol 
-mappingTable = {
-    (0,0) : 1+1j,
-    (0,1) : -1+1j,
-    (1,0) : 1-1j,
-    (1,1) : -1-1j
-}
-demappingTable = {v : k for k, v in mappingTable.items()}
+if QPSK:
+    mu = 2 # bits per symbol 
+    mappingTable = {
+        (0,0) : 1+1j,
+        (0,1) : -1+1j,
+        (1,0) : 1-1j,
+        (1,1) : -1-1j
+    }
+    demappingTable = {v : k for k, v in mappingTable.items()}
+
+# 16 QAM
+if QAM:
+    mu = 4
+    mappingTable = {
+        (0,0,0,0) : -3-3j,
+        (0,0,0,1) : -3-1j,
+        (0,0,1,0) : -3+3j,
+        (0,0,1,1) : -3+1j,
+        (0,1,0,0) : -1-3j,
+        (0,1,0,1) : -1-1j,
+        (0,1,1,0) : -1+3j,
+        (0,1,1,1) : -1+1j,
+        (1,0,0,0) :  3-3j,
+        (1,0,0,1) :  3-1j,
+        (1,0,1,0) :  3+3j,
+        (1,0,1,1) :  3+1j,
+        (1,1,0,0) :  1-3j,
+        (1,1,0,1) :  1-1j,
+        (1,1,1,0) :  1+3j,
+        (1,1,1,1) :  1+1j
+    }
+    demappingTable = {v : k for k, v in mappingTable.items()}
 
 # Chirp Chain
 fs = 44100
@@ -39,7 +66,7 @@ time_between = 0
 number_chirps = 1
 window_strength = 10.0
 f1 = 60.0
-f2 = 6000.0
+f2 = 10000.0
 
 # Pilot Estimation
 pilotImportance = 0.5
@@ -61,3 +88,6 @@ blockNum = 10
 # Maximum Likelihood Estimation
 maximum_likelihood_estimation = False
 length_of_MLE = 11
+
+# Bandlimiting
+useBandLimit = True

@@ -7,7 +7,7 @@ from channel import *
 from audio_utils import *
 from ldpc_jossy.py import ldpc
 
-dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = True)
+dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = useBandLimit)
 
 ### TRANSMITTER ###
 
@@ -39,7 +39,7 @@ for i in range(len(ba)):
 ba = np.array(ldpcConvert).ravel()
 
 # Append required number of zeros to end to send a full final OFDM symbol
-numZerosAppend = len(dataCarriers)*2 - (len(ba) - len(ba)//mu//len(dataCarriers) * len(dataCarriers) * mu)
+numZerosAppend = len(dataCarriers)*mu - (len(ba) - len(ba)//mu//len(dataCarriers) * len(dataCarriers) * mu)
 ba = np.append(ba, np.random.binomial(n=1, p=0.5, size=(numZerosAppend, )))
 bitsSP = ba.reshape((len(ba)//mu//len(dataCarriers), len(dataCarriers), mu))
 
@@ -80,7 +80,7 @@ plt.plot(dataTotal)
 plt.title("Signal to send"); plt.xlabel('Sample number'); plt.ylabel('Sound amplitude');
 plt.show()
 
-#write("audio/exp_sounds/asyoulikeit_251_4_bandlimit35_125.wav", fs, dataTotal)
+write("audio/brendan/asyoulikeit_125_2-3_ldpc.wav", fs, dataTotal)
 
 ### CHANNEL ###
 
@@ -106,9 +106,10 @@ plt.show()
 positionChirpEnd = chirp_synchroniser(ofdmReceived)
 
 # OFDM block channel estimation
-ofdmBlockStart = positionChirpEnd 
+ofdmBlockStart = positionChirpEnd  
 ofdmBlockEnd = positionChirpEnd + (N + CP) * blockNum 
-dataEnd = ofdmBlockEnd + numOFDMblocks * (N + CP)
+dataStart = ofdmBlockEnd 
+dataEnd = ofdmBlockEnd  + numOFDMblocks * (N + CP)
 
 # If want to use known OFDM in data
 # dataEnd = ofdmBlockEnd + (numOFDMblocks + numOFDMblocks//5) * (N + CP) 
@@ -123,7 +124,7 @@ print(offsetsss)
 # plt.plot(ofdmReceived[ofdmBlockEnd:dataEnd])
 # plt.show()
 
-equalizedSymbols, hestAggregate = map_to_decode(ofdmReceived[ofdmBlockEnd:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, offset=0, samplingMismatch = 0, pilotImportance = 0, pilotValues = True, knownOFDMImportance = 0, knownOFDMInData = False)
+equalizedSymbols, hestAggregate = map_to_decode(ofdmReceived[dataStart:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, offset=0, samplingMismatch = 0, pilotImportance = 0, pilotValues = True, knownOFDMImportance = 0, knownOFDMInData = False)
 
 # Noise variances shown for now
 noiseVariances = [1, 1]
@@ -137,15 +138,15 @@ for block in llrsReceived:
     fullOutputData.append(outputData[0:ldpcBlockLength])
 outputData = np.array(fullOutputData).ravel()
 
-#outputData, hardDecision = demapping(equalizedSymbols, demappingTable)
+# outputData, hardDecision = demapping(equalizedSymbols, demappingTable)
 
-#for qpsk, hard in zip(equalizedSymbols[0:400], hardDecision[0:400]):
+# for qpsk, hard in zip(equalizedSymbols[0:400], hardDecision[0:400]):
 #    plt.plot([qpsk.real, hard.real], [qpsk.imag, hard.imag], 'b-o');
 #    plt.plot(hardDecision[0:400].real, hardDecision[0:400].imag, 'ro')
-#plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Demodulated Constellation');
-#plt.show()
+# plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Demodulated Constellation');
+# plt.show()
 
-dataToCsv = np.array(outputData, dtype=int)[:lenData]
+dataToCsv = np.array(outputData, dtype=int).ravel()[:lenData]
 demodulatedOutput = ''.join(str(e) for e in dataToCsv)
 print(text_from_bits(demodulatedOutput))
 

@@ -52,7 +52,7 @@ def calculateBER(ba, audioOutput):
     for i in range(len(audioOutput)):
         if ba[i] != audioOutput[i]:
             errorCount += 1
-    return errorCount / len(ba)
+    return errorCount / len(audioOutput)
 
 def image2bits(image_path, plot = False):
 

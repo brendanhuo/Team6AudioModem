@@ -103,15 +103,16 @@ def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N
     for i in range(numberOfBlocks):
         # Retrace back the original seed
         rng = default_rng(randomSeedStart + i)
-        bits = rng.binomial(n=1, p=0.5, size=((K-1)*2))
+        bits = rng.binomial(n=1, p=0.5, size=((K-1)*mu))
         bitsSP = bits.reshape(len(bits)//mu, mu)
         symbol = np.array([mappingTable[tuple(b)] for b in bitsSP])
-        expectedSymbols = np.append(np.append(0, symbol), np.append(0,np.conj(symbol)[::-1]))
+        expectedSymbols = np.concatenate(([0], symbol, [0], np.conj(symbol)[::-1]))
 
         receivedSymbols = knownOFDMBlock[i*(N+CP): (i+1)*(N+CP)]
         receivedSymbols = removeCP(receivedSymbols, CP, N)
         receivedSymbols = DFT(receivedSymbols, N)
-
+        print(len(receivedSymbols))
+        print(expectedSymbols[1026])
         for j in range(N):
             # Avoids divide by 0 errors
             if j == N//2 or j == 0:
@@ -177,13 +178,38 @@ def calculate_sampling_mismatch(audio, channelH, N, CP, pilotCarriers, pilotValu
         Hest = (1-pilotImportance) * Hest + pilotImportance*pilotHest
     
     # Perform linear regression to calculate gradient
-    y = pilotOffsets
+    # y = pilotOffsets
+    # x = np.arange(len(y))
+    
+    # model = LinearRegression().fit(x[:, np.newaxis], y)
+    # y_fit = model.predict(x[:, np.newaxis])
+    
+    # slope = model.coef_[0]
+
+    # Smooths input
+    yhat = savgol_filter(pilotOffsets, 31, 1) # window size 11, polynomial order 1
+
+    # Process below to filter out the noisy signals to find the best continuous sequence to estimate the gradient
+    second_deriv = np.gradient(np.gradient(yhat[0:N//2]))
+    boundary = np.mean(abs(second_deriv))
+    goodFrequencies = []
+    for i in range(len(second_deriv)):
+        if abs(second_deriv[i]) <= boundary:
+            goodFrequencies.append(i)
+    best_sequence = get_continue_seq(goodFrequencies)
+
+    # Perform linear regression to calculate gradient
+    y = yhat[best_sequence]
     x = np.arange(len(y))
     
     model = LinearRegression().fit(x[:, np.newaxis], y)
     y_fit = model.predict(x[:, np.newaxis])
     
     slope = model.coef_[0]
+
+    # If sequence length is short, likely that gradient is flat and so return offset = 0
+    if len(best_sequence) <= 30:
+        return 0
 
     if plot:
         plt.plot(pilotOffsets, label = 'pilot tone offsets')
@@ -198,6 +224,7 @@ def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotV
     dataArrayEqualized = [] #Output data array
     
     Hest = channelH
+    plt.semilogy(np.arange(len(Hest))*fs/N, abs(Hest), label = '0 data blocks along')
     HestAggregate = []
 
     # Remaining offset to rotate by after shifting samples
@@ -215,12 +242,12 @@ def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotV
         # Shift and rotate by offset
         remainingDifference += i * samplingMismatch
         if abs(remainingDifference)>=1:
-            data = audio[i*(N+CP)+floor(remainingDifference): (N+CP)*(i+1)+floor(remainingDifference)]
+            preData = audio[i*(N+CP)+floor(remainingDifference): (N+CP)*(i+1)+floor(remainingDifference)]
             toRotate = remainingDifference - floor(remainingDifference)
         else:
-            data = audio[i*(N+CP): (N+CP)*(i+1)]
+            preData = audio[i*(N+CP): (N+CP)*(i+1)]
             toRotate = remainingDifference
-        data = removeCP(data, CP, N)
+        data = removeCP(preData, CP, N)
         data = DFT(data, N)
         for l in range(len(data)):
             #data[l] *= cmath.exp(remainingDifference * l * 2 * np.pi/N)
@@ -236,7 +263,7 @@ def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotV
         if knownOFDMInData:
             # Every 5 data blocks is one known OFDM block
             if count != 0 and count % 5 == 0:
-                updateHest, updateOffset =  channel_estimate_known_ofdm(audio[i*(N+CP): (N+CP)*(i+1)], seedStart, mappingTable, N, K, CP, mu, plot = False)
+                updateHest, updateOffset =  channel_estimate_known_ofdm(preData, seedStart, mappingTable, N, K, CP, mu, plot = False)
                 updateOffsets.append(updateOffset)
                 appendToData = False
                 count = 0
@@ -256,9 +283,9 @@ def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotV
 
         # Plot for 50th and 200th to convince oneself
         if i == 50 and plot: 
-            plt.plot(np.arange(len(Hest))*fs/N, abs(Hest), label = '50 data blocks along')
+            plt.semilogy(np.arange(len(Hest))*fs/N, abs(Hest), label = '50 data blocks along')
         elif i == 200 and plot :
-            plt.plot(np.arange(len(Hest))*fs/N, abs(Hest), label = '200 data blocks along')
+            plt.semilogy(np.arange(len(Hest))*fs/N, abs(Hest), label = '200 data blocks along')
     if plot:
         plt.legend(); plt.title('Show H at 50th and 200th data block'); plt.xlabel('Frequency/Hz'); plt.ylabel('$|H(f)|$');plt.show()
     return np.array(dataArrayEqualized).ravel(), np.array(HestAggregate).ravel()
@@ -372,7 +399,7 @@ def return_llrs(receivedSymbols, channelEstimates, noiseSigma):
     receivedSymbolsReal = receivedSymbols.real
     receivedSymbolsImag = receivedSymbols.imag
 
-    llrsFirstBit = channelEstimateMagnitudes * receivedSymbolsImag * np.sqrt(2) / varianceImag # Right now, constellations not normalized so have to add in sqrt(2) later
+    llrsFirstBit = channelEstimateMagnitudes * receivedSymbolsImag * np.sqrt(2) / varianceImag 
     llrsSecondBit = channelEstimateMagnitudes * receivedSymbolsReal * np.sqrt(2) / varianceReal
     
 

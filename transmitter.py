@@ -31,15 +31,16 @@ def assign_data_pilot(K, P, bandLimited = False):
 def mapping(bits):
     """ Maps each batch of bits to a constellation symbol"""
 
-    mapping_table = {
-        (0,0) : (1+1j) / np.sqrt(2),
-        (0,1) : (-1+1j) / np.sqrt(2),
-        (1,0) : (1-1j) / np.sqrt(2),
-        (1,1) : (-1-1j) / np.sqrt(2)
-    }
-    demapping_table = {v : k for k, v in mapping_table.items()}
+    # mapping_table = {
+    #     (0,0) : (1+1j) / np.sqrt(2),
+    #     (0,1) : (-1+1j) / np.sqrt(2),
+    #     (1,0) : (1-1j) / np.sqrt(2),
+    #     (1,1) : (-1-1j) / np.sqrt(2)
+    # }
+    # demapping_table = {v : k for k, v in mapping_table.items()}
 
-    return np.array([mapping_table[tuple(b)] for b in bits])
+    # return np.array([mapping_table[tuple(b)] for b in bits])
+    return np.array([mappingTable[tuple(b)] for b in bits])
 
 
 def ofdm_symbol(K, pilotValue, pilotCarriers, dataCarriers, qpskPayload):
@@ -94,11 +95,11 @@ def known_ofdm_block(blocknum, randomSeedStart, mu, K, CP, mappingTable):
     knownOFDMBlock = []
     for i in range(blocknum):
         rng = default_rng(randomSeedStart + i)
-        bits = rng.binomial(n=1, p=0.5, size=((K-1)*2))
+        bits = rng.binomial(n=1, p=0.5, size=((K-1)*mu))
         bitsSP = bits.reshape(len(bits)//mu, mu)
 
         symbol = np.array([mappingTable[tuple(b)] for b in bitsSP])
-        ofdmSymbols = np.append(np.append(0, symbol), np.append(0,np.conj(symbol)[::-1]))
+        ofdmSymbols = np.concatenate(([0], symbol, [0], np.conj(symbol)[::-1]))
 
         ofdmTime = idft(ofdmSymbols)
         ofdmWithCP = add_cp(CP, ofdmTime)
