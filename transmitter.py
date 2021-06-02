@@ -24,6 +24,7 @@ def assign_data_pilot(K, P, bandLimited = False):
         dataCarriers = np.delete(dataCarriers, 0)[0:len(dataCarriers)*3//5]
     else:
         dataCarriers = np.delete(dataCarriers, 0)
+
     return dataCarriers, pilotCarriers
 
 
@@ -42,7 +43,7 @@ def mapping(bits):
     return np.array([mappingTable[tuple(b)] for b in bits])
 
 
-def ofdm_symbol(K, pilotValue, pilotCarriers, dataCarriers, qpskPayload, pilotSeed = 2000):
+def ofdm_symbol(K, pilotValue, pilotCarriers, dataCarriers, qpskPayload):
     """Assigns pilot values and payload values to OFDM symbol, take reverse complex conjugate and append to end to make signal passband"""
 
     # Rather than use zeros, use random bits to fill space that doesn't have pilots or data payloads
@@ -105,3 +106,37 @@ def known_ofdm_block(blocknum, randomSeedStart, mu, K, CP, mappingTable):
         knownOFDMBlock.append(ofdmWithCP.real)
         
     return np.array(knownOFDMBlock).ravel()
+
+
+def append_Metadata(ba, file, lenData):
+    """Returns Metadata array to append before file"""
+
+    # Minimum distance encoding
+
+    # File length Data
+    step_value = hamming_distance
+    if step_value * lenData > 2**len_file_len:
+        raise ValueError("Insufficient memory assinged to Metadata: {} bits required, but only {} allocated".format(step_value * lenData, 2**len_file_len))
+
+    file_len_encoded = bin(step_value * lenData)[2:]
+    file_len_encoded = [int(i) for i in str(file_len_encoded)]
+    file_len_data = np.concatenate((np.zeros(len_file_len - len(file_len_encoded)).tolist(), file_len_encoded))
+    file_len_data = np.tile(file_len_data, num_file_len)
+    # print("file length data: ", file_len_data, len(file_len_data))
+
+    # File format Data
+
+    file_format = file_formats[file[-3:]]
+
+    step_value = hamming_distance
+    if step_value * file_format > 2**len_file_format:
+        raise ValueError("Insufficient memory assinged to Metadata: {} bits required, but only {} allocated".format(step_value * file_format, 2**len_file_format))
+
+    file_format_encoded = bin(step_value * file_format)[2:]
+    file_format_data = np.concatenate((np.zeros(len_file_format - len(file_format_encoded)), np.array([int(i, 2) for i in file_format_encoded])))
+    file_format_data = np.tile(file_format_data, num_file_format)
+    # print("file format data: ", file_format_data, len(file_format_data))
+
+    metadata = np.concatenate((file_len_data, file_format_data, ba))
+
+    return metadata

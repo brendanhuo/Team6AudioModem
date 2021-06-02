@@ -4,7 +4,7 @@ from graphing_utils import *
 from globals import *
 
 
-def exponential_chirp():
+def exponential_chirp(chirp_length=chirp_length, f2=f2, f1=f1, window_strength=window_strength):
     """Produces exponential chirp with exponential envelope"""
 
     T = chirp_length

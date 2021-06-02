@@ -7,23 +7,48 @@ from channel import *
 from audio_utils import *
 from ldpc_jossy.py import ldpc
 
-useldpc = True 
-fileType = 'txt' #'tiff', 'wav', 'txt'
+useldpc = True
 dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = useBandLimit)
 
 ### TRANSMITTER ###
 
 # Import text file for testing
-with open("./text/asyoulik.txt") as f:
-    contents = f.read()
-    contents = contents[:len(contents)//2]
 
-ba = bitarray.bitarray()
-ba.frombytes(contents.encode('utf-8'))
-ba = np.array(ba.tolist())
+# file = "./text/asyoulik.txt"
+# file = "./text/lorem.txt"
+file = "./image/autumn_small.tif"
+# file = "audio/James/chirp length/lorem_2.0s.wav"
+actualfileformat = file[-3:]
+
+# Reads file depending on detected format
+if file_formats[actualfileformat] == 1:
+    with open(file) as f:
+        contents = f.read()
+        # contents = contents[:len(contents)//8]
+    ba = bitarray.bitarray()
+    ba.frombytes(contents.encode('utf-8'))
+    ba = np.array(ba.tolist())
+
+elif file_formats[actualfileformat] == 2:
+    ba, _ = image2bits(file, plot=False)
+
+elif file_formats[actualfileformat] == 3:
+    binary = []
+    with open(file, "rb") as f:
+        ba = f.read()
+    for byte in ba:
+        binary.append([int(i) for i in str(bin(byte)[2:].zfill(8))])
+    ba = np.array(binary)
+    ba = ba.reshape(-1)
+    print(len(ba))
+else:
+    raise ValueError("Not a recognisable file format: formats include: ", file_formats)
+
 actualData = ba
+lenData0 = len(ba)
 
-lenData = len(ba)
+### Metadata Encoding ###
+ba = append_Metadata(ba, file, lenData0)
 
 # LDPC encoding
 if useldpc:
@@ -32,7 +57,9 @@ if useldpc:
 
     # Pad ba for ldpc
     ba = np.append(ba, np.zeros(((len(ba)) // ldpcBlockLength + 1) * ldpcBlockLength - len(ba)))
+
     ba = np.reshape(ba, (-1, ldpcBlockLength))
+
     ldpcConvert = []
     for i in range(len(ba)):
         encoded = ldpcCoder.encode(ba[i])
@@ -82,7 +109,7 @@ plt.plot(dataTotal)
 plt.title("Signal to send"); plt.xlabel('Sample number'); plt.ylabel('Sound amplitude');
 plt.show()
 
-write("audio/brendan/asyoulikeit_125_2-3_qpsk_3.wav", fs, dataTotal)
+write("audio/James/Encoded Inputs/input.{}".format(actualfileformat), fs, dataTotal)
 
 ### CHANNEL ###
 
@@ -111,7 +138,7 @@ positionChirpEnd = chirp_synchroniser(ofdmReceived)
 ofdmBlockStart = positionChirpEnd + (N + CP) * noiseBlocks
 ofdmBlockEnd = positionChirpEnd + (N + CP) * blockNum + (N + CP) * noiseBlocks
 dataStart = ofdmBlockEnd 
-dataEnd = dataStart + numOFDMblocks * (N + CP)
+#dataEnd = dataStart + numOFDMblocks * (N + CP)
 
 # If want to use known OFDM in data
 # dataEnd = ofdmBlockEnd + (numOFDMblocks + numOFDMblocks//5) * (N + CP) 
@@ -126,11 +153,18 @@ print(offsetsss)
 # plt.plot(ofdmReceived[ofdmBlockEnd:dataEnd])
 # plt.show()
 
-equalizedSymbols, hestAggregate = map_to_decode(ofdmReceived[dataStart:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, offset=0, samplingMismatch = 0, pilotImportance = 0, pilotValues = True, knownOFDMImportance = 0, knownOFDMInData = False)
+
+### EXTRACT METADATA ###
+
+lenData, numOFDMblocks, file_format = extract_Metadata(dataCarriers, ofdmReceived, dataStart, hest, pilotCarriers, numZerosAppend, ldpcCoder, ldpcBlockLength)
+
+# print("estimated length: ", lenData + len_metadata_bits)
+
+equalizedSymbols, hestAggregate = map_to_decode(ofdmReceived[dataStart:dataStart + numOFDMblocks * (N + CP)], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, offset=0, samplingMismatch=0, pilotImportance=0,
+                                                    pilotValues=True, knownOFDMImportance=0, knownOFDMInData=False)
 
 # Noise variances shown for now
 noiseVariances = [1, 1]
-
 def ldpcDecode(equalizedSymbols, hestAggregate, noiseVariances, numZerosAppend):
     if QPSK:
         llrsReceived = return_llrs(equalizedSymbols, hestAggregate, noiseVariances)
@@ -138,7 +172,14 @@ def ldpcDecode(equalizedSymbols, hestAggregate, noiseVariances, numZerosAppend):
         llrsReceived = return_llrs_16qam(equalizedSymbols, hestAggregate, noiseVariances)[:-numZerosAppend]
     llrsReceived = np.reshape(llrsReceived[:len(llrsReceived)//648*648], (-1, 2 * ldpcCoder.K))
     fullOutputData = []
+    i = 0
     for block in llrsReceived:
+        percentage_0 = i * 100 // len(llrsReceived)
+        i += 1
+        percentage = i * 100 // len(llrsReceived)
+
+        if percentage != percentage_0:
+            print("{}% completed".format(percentage))
         outputData, _ = ldpcCoder.decode(block)
         np.place(outputData, outputData>0, int(0))
         np.place(outputData, outputData<0, int(1))
@@ -156,10 +197,30 @@ else:
         plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Demodulated Constellation');
     plt.show()
 
-dataToCsv = np.array(outputData, dtype=int).ravel()[:lenData]
-demodulatedOutput = ''.join(str(e) for e in dataToCsv)
-print(text_from_bits(demodulatedOutput))
+dataToCsv = np.array(outputData, dtype=int).ravel()[len_metadata_bits:len_metadata_bits + lenData]
 
+if file_format == 1:
+    demodulatedOutput = ''.join(str(e) for e in dataToCsv)
+    print(text_from_bits(demodulatedOutput))
+
+elif file_format == 2:
+    byte_array = []
+    for i in range(len(dataToCsv) // 8):
+        demodulatedOutput = ''.join(str(e) for e in dataToCsv[8 * i:8 * (i + 1)])
+        byte_array.append(int(demodulatedOutput, 2))
+    lenBytes = 1
+    for shape in image_shape:
+        lenBytes *= shape
+    plt.imshow(np.array(byte_array)[0:lenBytes].reshape(image_shape))
+    plt.title('Image received')
+    plt.show()
+
+elif file_format == 3:
+    save(dataToCsv, "audio/James/Decoded Outputs/output.wav{}".format(file_format))
+    print(len(dataToCsv)/fs)
+    play(dataToCsv)
+
+# print("lengths: ", lenData, len(dataToCsv), len(actualData))
 ber = calculateBER(actualData, dataToCsv)
 print("BER: " + str(ber))
 

@@ -111,7 +111,7 @@ def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N
         receivedSymbols = knownOFDMBlock[i*(N+CP): (i+1)*(N+CP)]
         receivedSymbols = removeCP(receivedSymbols, CP, N)
         receivedSymbols = DFT(receivedSymbols, N)
-       
+
         for j in range(N):
             # Avoids divide by 0 errors
             if j == N//2 or j == 0:
@@ -174,7 +174,7 @@ def calculate_sampling_mismatch(audio, channelH, N, CP, pilotCarriers, pilotValu
         pilotHest, pilotOffset = channel_estimate_pilot(data_equalized, pilotCarriers, pilotValue, N)
         pilotOffsets.append(pilotOffset)
         
-        #Hest = (1-pilotImportance) * Hest + pilotImportance*pilotHest
+        # Hest = (1-pilotImportance) * Hest + pilotImportance*pilotHest
     
     # Perform linear regression to calculate gradient
     # y = pilotOffsets
@@ -437,7 +437,7 @@ def return_llrs_16qam(receivedSymbols, channelEstimates, noiseSigma):
     llrs[2::4] = llrsThirdBit
     llrs[3::4] = llrsFourthBit
     return llrs
-
+    
 def demapping(qpsk, demappingTable):
     """Demaps from demodulated constellation to original bit sequence"""
 
@@ -456,3 +456,78 @@ def demapping(qpsk, demappingTable):
     
     # transform the constellation point into the bit groups
     return np.vstack([demappingTable[C] for C in hardDecision]), hardDecision
+
+
+def extract_Metadata(dataCarriers, ofdmReceived, dataStart, hest, pilotCarriers, numZerosAppend, ldpcCoder, ldpcBlockLength):
+    """Extracts Metadata and returns estimated values"""
+
+    # Determine end point of data from Metadata at beginning of received signal
+    num_Metadata_bits = len_file_len * num_file_len + len_file_format * num_file_format
+    numOFDM_Metadata_blocks = math.ceil(num_Metadata_bits / (mu * len(dataCarriers))) + 1
+
+    equalizedSymbols, hestAggregate = map_to_decode(ofdmReceived[dataStart:dataStart + numOFDM_Metadata_blocks * (N + CP)], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, offset=0, samplingMismatch=0, pilotImportance=0,
+                                                    pilotValues=True, knownOFDMImportance=0, knownOFDMInData=False)
+    # Noise variances shown for now
+    noiseVariances = [1, 1]
+    llrsReceived = return_llrs(equalizedSymbols, hestAggregate, noiseVariances)[:-numZerosAppend]
+    llrsReceived = np.reshape(llrsReceived[:len(llrsReceived) // 648 * 648], (-1, 2 * ldpcCoder.K))
+    fullOutputData = []
+    for block in llrsReceived:
+        outputData, _ = ldpcCoder.decode(block)
+        np.place(outputData, outputData > 0, int(0))
+        np.place(outputData, outputData < 0, int(1))
+        fullOutputData.append(outputData[0:ldpcBlockLength])
+    outputData = np.array(fullOutputData).ravel()
+
+    print("outputData: ", outputData)
+
+    # File length
+    file_len_data = outputData[:len_file_len * num_file_len]
+    print(file_len_data)
+    print("extracted file length raw data (first estimate)", file_len_data[:len_file_len])
+    estimates = [0]*num_file_len
+    for i in range(num_file_len):
+        estimates[i] = file_len_data[i * len_file_len:(i + 1) * len_file_len]
+
+    file_len = [0] * len_file_len
+    for i in range(len_file_len):
+        total = 0
+        for j in range(len(estimates)):
+            total += estimates[j][i]
+        if total / len(estimates) > 0.5:
+            file_len[i] = 1
+        else:
+            file_len[i] = 0
+
+    file_len = bin(int(''.join(map(str, file_len)), 2))[2:]
+    print(file_len)
+    # print("file length raw data determined via aggregate", file_len)
+    file_len = round((int(file_len, 2) / hamming_distance))
+    print("File length in denary: ", file_len)
+
+    # File format
+    file_format_data = outputData[(len_file_len * num_file_len):(len_file_len * num_file_len) + (len_file_format * num_file_format)]
+    estimates = [0] * num_file_format
+    for i in range(num_file_format):
+        estimates[i] = file_format_data[i * len_file_format:(i + 1) * len_file_format]
+
+    file_format = [0] * len_file_format
+    for i in range(len_file_format):
+        total = 0
+        for j in range(len(estimates)):
+            total += estimates[j][i]
+        if total / len(estimates) > 0.5:
+            file_format[i] = 1
+        else:
+            file_format[i] = 0
+    file_format = bin(int(''.join(map(str, file_format)), 2))[2:]
+    # print("file length raw data determined via aggregate", file_len)
+    file_format = round((int(file_format, 2) / hamming_distance))
+    print("File format in denary: ", file_format)
+
+    len_metadata_bits = len_file_len * num_file_len + len_file_format * num_file_format
+
+    # LDPC length is *2 + padded 0's so multiple of LDPC block length
+    num_ofdm_blocks = math.ceil(math.ceil((file_len + len_metadata_bits) / ldpcBlockLength) * (file_len + len_metadata_bits) * 2 / len(dataCarriers))
+
+    return file_len, num_ofdm_blocks, file_format

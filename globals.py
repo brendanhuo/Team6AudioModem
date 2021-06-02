@@ -13,6 +13,8 @@ import bitarray
 from numpy.random import default_rng
 from scipy.io.wavfile import write
 from scipy import signal
+from binary_utils import *
+
 
 # OFDM
 N = 2048 # DFT size
@@ -63,9 +65,9 @@ fs = 44100
 chirp_length = 1
 time_between = 0
 number_chirps = 1
-window_strength = 10.0
+window_strength = 50.0
 f1 = 60.0
-f2 = 10000.0
+f2 = 6000.0
 
 # Pilot Estimation
 pilotImportance = 0.5
@@ -91,8 +93,31 @@ length_of_MLE = 11
 # Bandlimiting
 useBandLimit = True
 
-# Noise after chirp (to take into account of ramp up)
+# Noise blocks
 noiseBlocks = 0
+
+# Metadata
+metadata = True
+hamming_distance = 128
+
+len_file_len = 32  # bits
+num_file_len = 1  # number of repeats
+
+len_file_format = 16  # bits
+num_file_format = 1  # number of repeats
+file_formats = {"txt" : 1, "tif" : 2, "wav" : 3}
+
+if metadata:
+    len_metadata_bits = len_file_len * num_file_len + len_file_format * num_file_format
+else:
+    len_metadata_bits = 0
+
+# Images
+# Assume image shape is just shape of "Autumn"
+_, image_shape = image2bits("./image/autumn_small.tif", plot=False)
+
+# Wav
+bits_per_sample = 32
 
 # Pilot Values
 # allCarriers = np.arange(K)

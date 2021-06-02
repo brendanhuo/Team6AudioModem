@@ -59,14 +59,14 @@ sound = map_to_transmit(K, CP, pilotValue, pilotCarriers, dataCarriers, bitsSP)
 knownOFDMBlock = known_ofdm_block(blockNum, seedStart, mu, K, CP, mappingTable)
 
 # Total data sent over channel
-dataTotal = np.concatenate((np.zeros(44100), exponentialChirp.ravel(), knownOFDMBlock, sound))
+dataTotal = np.concatenate((np.zeros(44100), exponentialChirp.ravel(), knownOFDMBlock, sound, np.zeros(fs)))
 
 plt.plot(dataTotal)
 plt.title("Signal to send")
 plt.xlabel('Sample number');plt.ylabel('Sound amplitude');
 plt.show()
 
-write("audio/exp_sounds/autumn-test.wav", fs, dataTotal)
+write("audio/brendan/autumn-test_test1.wav", fs, dataTotal)
 
 # ### CHANNEL ###
 
