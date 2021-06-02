@@ -78,9 +78,9 @@ f1 = 100.0 # 60.0 used for a lot of testing
 f2 = 10000.0
 
 # Pilot Estimation
-pilotImportance = 0.5
+pilotImportance = 0.25
 pilotValues = True
-knownOFDMImportance = 0
+knownOFDMImportance = 0.25
 knownOFDMInData = True
 
 # Chirp Estimation

@@ -63,10 +63,10 @@ def get_continue_seq(str_list):
     res = index_count[max(index_count, key=lambda x: len(index_count[x]))]
     return res
 
-def get_clean_offset(hest, plot = False):
+def get_clean_offset(hest, dropFront = 0, dropBack = -1, plot = False):
     """ Calculates offset values (in number of samples) from taking gradient of phase"""
     # Smooths input
-    yhat = savgol_filter(np.unwrap(np.angle(hest)), 31, 1) # window size 11, polynomial order 1
+    yhat = savgol_filter(np.unwrap(np.angle(hest)), 31, 1)[dropFront:dropBack] # window size 11, polynomial order 1
 
     # Process below to filter out the noisy phase signals to find the best continuous sequence to estimate the phase gradient
     second_deriv = np.gradient(np.gradient(yhat[0:N//2]))
@@ -130,7 +130,7 @@ def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N
         plt.plot(np.arange(N//2 )/fs, hestImpulse[0:N//2])
         plt.title('Impulse response'); plt.xlabel('Time / s'); plt.ylabel('Amplitude of impulse response')
         plt.show()
-    offset, y_fit = get_clean_offset(hestAtSymbols, plot = plot)
+    offset, y_fit = get_clean_offset(hestAtSymbols, dropFront = 300, dropBack = upperFrequencyBin, plot = plot)
     return hestAtSymbols, offset
 
 def channel_estimate_pilot(ofdmReceived, pilotCarriers, pilotValue, N):
@@ -182,7 +182,7 @@ def calculate_sampling_mismatch(audio, channelH, N, CP, pilotCarriers, pilotValu
         data_equalized = data/Hest
         if knownOFDMInData:
             if count == knownInDataFreq:
-                pilotOffsets.append(None)
+                pilotOffsets.append(pilotOffsets[-1]) # For now do this, may need to do cleverer method later
                 count = 0
             else:
                 pilotHest, pilotOffset = channel_estimate_pilot(data_equalized, pilotCarriers, pilotValue, N)
