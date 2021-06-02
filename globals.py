@@ -14,14 +14,18 @@ from numpy.random import default_rng
 from scipy.io.wavfile import write
 from scipy import signal
 from binary_utils import *
-
+from ldpc_jossy.py import ldpc
 
 # OFDM
 N = 2048 # DFT size
 K = N//2 # number of OFDM subcarriers with information
 CP = K//4  # length of the cyclic prefix
-P = 125 # number of pilot carriers per OFDM block (cannot be a multiple of 2 for some reason)
-pilotValue = (1+1j)/np.sqrt(2) # The known value each pilot transmits
+P = 128 # number of pilot carriers per OFDM block (cannot be a multiple of 2 for some reason)
+# pilotValue = (1+1j)/np.sqrt(2) # The known value each pilot transmits
+pilotValue = 1+1j # STANDARD
+
+lowerFrequencyBin = 50 # Inclusive
+upperFrequencyBin = 700 # Exclusive
 
 QPSK = True
 QAM = False
@@ -60,14 +64,18 @@ if QAM:
     }
     demappingTable = {v : k for k, v in mappingTable.items()}
 
+# LDPC
+ldpcCoder = ldpc.code()
+ldpcBlockLength = ldpcCoder.K
+
 # Chirp Chain
 fs = 44100
 chirp_length = 1
 time_between = 0
 number_chirps = 1
-window_strength = 50.0
-f1 = 60.0
-f2 = 6000.0
+window_strength = 50.0 # 10.0 used for a lot of testing
+f1 = 100.0 # 60.0 used for a lot of testing
+f2 = 10000.0
 
 # Pilot Estimation
 pilotImportance = 0.5
@@ -83,7 +91,8 @@ method_2 = False
 time_before_data = 0
 
 # OFDM known random symbols seed
-seedStart = 2000
+# seedStart = 2000 # For a lot of testing files
+seedStart = 2021 # STANDARD
 blockNum = 10
 
 # Maximum Likelihood Estimation
@@ -93,8 +102,12 @@ length_of_MLE = 11
 # Bandlimiting
 useBandLimit = True
 
-# Noise blocks
-noiseBlocks = 0
+# Blocks pre and post 10 known OFDM
+preblocknum = 1
+postblocknum = 1
+
+#Known OFDM in data frequency 
+knownInDataFreq = 10 #Every 10 data blocks is one known OFDM
 
 # Metadata
 metadata = True

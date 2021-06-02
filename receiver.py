@@ -99,10 +99,12 @@ def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N
 
     numberOfBlocks = len(knownOFDMBlock) // (N+CP)
     hestAtSymbols = np.zeros(N, dtype = complex) # estimate of the channel gain at particular frequency bins
-
+    rng = default_rng(randomSeedStart) # Used for standardised audio modem
     for i in range(numberOfBlocks):
         # Retrace back the original seed
-        rng = default_rng(randomSeedStart + i)
+        # rng = default_rng(randomSeedStart + i)
+        if i == numberOfBlocks // 2:
+            rng = default_rng(randomSeedStart)
         bits = rng.binomial(n=1, p=0.5, size=((K-1)*mu))
         bitsSP = bits.reshape(len(bits)//mu, mu)
         symbol = np.array([mappingTable[tuple(b)] for b in bitsSP])
@@ -119,7 +121,15 @@ def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N
             else:
                 div = (receivedSymbols[j]/expectedSymbols[j])
                 hestAtSymbols[j] = (hestAtSymbols[j] * i + div) / (i + 1) # Average over past OFDM blocks
+    if plot:
+        plt.semilogy(np.arange(N)*fs / N, abs(hestAtSymbols))
+        plt.grid(True); plt.title('Estimated H via known OFDM'); plt.xlabel('Frequency/Hz'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
+        plt.show()
 
+        hestImpulse = np.fft.ifft(hestAtSymbols)[0:N//2]
+        plt.plot(np.arange(N//2 )/fs, hestImpulse[0:N//2])
+        plt.title('Impulse response'); plt.xlabel('Time / s'); plt.ylabel('Amplitude of impulse response')
+        plt.show()
     offset, y_fit = get_clean_offset(hestAtSymbols, plot = plot)
     return hestAtSymbols, offset
 
@@ -219,7 +229,6 @@ def calculate_sampling_mismatch(audio, channelH, N, CP, pilotCarriers, pilotValu
     
 def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotValue, offset, samplingMismatch, pilotImportance = 0, pilotValues = True, knownOFDMImportance = 0, knownOFDMInData = False, plot = True):
     """Builds demodulated constellation symbol from OFDM symbols"""
-
     dataArrayEqualized = [] #Output data array
     
     Hest = channelH
@@ -257,20 +266,22 @@ def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotV
             pilotHest, pilotOffset = channel_estimate_pilot(data, pilotCarriers, pilotValue, N)
             pilotOffsets.append(pilotOffset)
         else:
+            pilotImportance = 0
             pilotHest = 0
         
         # !!! - this is not being used at the moment, may attempt to get it working in the future
         if knownOFDMInData:
-            # Every 5 data blocks is one known OFDM block
-            if count != 0 and count % 5 == 0:
-                updateHest, updateOffset =  channel_estimate_known_ofdm(preData, seedStart, mappingTable, N, K, CP, mu, plot = False)
+            # Every 10 data blocks is one known OFDM block
+            if count == knownInDataFreq:
+                updateHest, updateOffset =  channel_estimate_known_ofdm(preData, seedStart+1, mappingTable, N, K, CP, mu, plot = False)
                 updateOffsets.append(updateOffset)
                 appendToData = False
                 count = 0
-            else: 
+            else:
                 count += 1 
                 appendToData = True  
         else:
+            knownOFDMImportance = 0
             updateHest = 0 
 
         # Take weighted sum of each channel estimate contribution - note Hest is the past prediction for the previous data block
@@ -280,14 +291,15 @@ def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotV
         if appendToData:
             dataArrayEqualized.append(data_equalized)
             HestAggregate.append(Hest[0:K][dataCarriers])
-
-        # Plot for 50th and 200th to convince oneself
-        if i == 50 and plot: 
+        else:
+            pass 
+        # Plot for 55th and 205th to convince oneself
+        if i == 55 and plot: 
             plt.semilogy(np.arange(len(Hest))*fs/N, abs(Hest), label = '50 data blocks along')
-        elif i == 200 and plot :
+        elif i == 205 and plot :
             plt.semilogy(np.arange(len(Hest))*fs/N, abs(Hest), label = '200 data blocks along')
     if plot:
-        plt.legend(); plt.title('Show H at 50th and 200th data block'); plt.xlabel('Frequency/Hz'); plt.ylabel('$|H(f)|$');plt.show()
+        plt.legend(); plt.title('Show H at 0th, 55th and 205th data block'); plt.xlabel('Frequency/Hz'); plt.ylabel('$|H(f)|$');plt.show()
     return np.array(dataArrayEqualized).ravel(), np.array(HestAggregate).ravel()
 
 
@@ -392,7 +404,7 @@ def chirp_synchroniser(audio):
     return position
 
 # noiseSigma is a tuple of (noiseSigma.real, noiseSignal.imag)
-def return_llrs(receivedSymbols, channelEstimates, noiseSigma):
+def return_llrs_qpsk(receivedSymbols, channelEstimates, noiseSigma):
     varianceReal = noiseSigma[0]
     varianceImag = noiseSigma[1]
     channelEstimateMagnitudes = np.abs(channelEstimates) ** 2
@@ -437,7 +449,29 @@ def return_llrs_16qam(receivedSymbols, channelEstimates, noiseSigma):
     llrs[2::4] = llrsThirdBit
     llrs[3::4] = llrsFourthBit
     return llrs
-    
+
+def ldpcDecode(equalizedSymbols, hestAggregate, noiseVariances, numZerosAppend):
+    if QPSK:
+        llrsReceived = return_llrs_qpsk(equalizedSymbols, hestAggregate, noiseVariances)
+    elif QAM:
+        llrsReceived = return_llrs_16qam(equalizedSymbols, hestAggregate, noiseVariances)[:-numZerosAppend]
+    llrsReceived = np.reshape(llrsReceived[:len(llrsReceived)//(2*ldpcBlockLength)*2*ldpcBlockLength], (-1, 2 * ldpcBlockLength))
+    fullOutputData = []
+    i = 0
+    for block in llrsReceived:
+        percentage_0 = i * 100 // len(llrsReceived)
+        i += 1
+        percentage = i * 100 // len(llrsReceived)
+
+        if percentage != percentage_0:
+            print("{}% completed".format(percentage))
+        outputData, _ = ldpcCoder.decode(block)
+        np.place(outputData, outputData>0, int(0))
+        np.place(outputData, outputData<0, int(1))
+        fullOutputData.append(outputData[0:ldpcBlockLength])
+    outputData = np.array(fullOutputData).ravel()
+    return outputData
+
 def demapping(qpsk, demappingTable):
     """Demaps from demodulated constellation to original bit sequence"""
 
@@ -469,7 +503,7 @@ def extract_Metadata(dataCarriers, ofdmReceived, dataStart, hest, pilotCarriers,
                                                     pilotValues=True, knownOFDMImportance=0, knownOFDMInData=False)
     # Noise variances shown for now
     noiseVariances = [1, 1]
-    llrsReceived = return_llrs(equalizedSymbols, hestAggregate, noiseVariances)[:-numZerosAppend]
+    llrsReceived = return_llrs_qpsk(equalizedSymbols, hestAggregate, noiseVariances)[:-numZerosAppend]
     llrsReceived = np.reshape(llrsReceived[:len(llrsReceived) // 648 * 648], (-1, 2 * ldpcCoder.K))
     fullOutputData = []
     for block in llrsReceived:

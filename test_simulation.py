@@ -5,7 +5,6 @@ from receiver import *
 from chirp import *
 from channel import *
 from audio_utils import *
-from ldpc_jossy.py import ldpc
 
 useldpc = True
 dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = useBandLimit)
@@ -15,8 +14,8 @@ dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = useBandLimit
 # Import text file for testing
 
 # file = "./text/asyoulik.txt"
-# file = "./text/lorem.txt"
-file = "./image/autumn_small.tif"
+file = "./text/lorem.txt"
+# file = "./image/autumn_small.tif"
 # file = "audio/James/chirp length/lorem_2.0s.wav"
 actualfileformat = file[-3:]
 
@@ -47,14 +46,12 @@ else:
 actualData = ba
 lenData0 = len(ba)
 
+print(len(ba))
 ### Metadata Encoding ###
 ba = append_Metadata(ba, file, lenData0)
 
 # LDPC encoding
 if useldpc:
-    ldpcCoder = ldpc.code()
-    ldpcBlockLength = ldpcCoder.K
-
     # Pad ba for ldpc
     ba = np.append(ba, np.zeros(((len(ba)) // ldpcBlockLength + 1) * ldpcBlockLength - len(ba)))
 
@@ -76,32 +73,34 @@ numOFDMblocks = len(bitsSP)
 print(numOFDMblocks)
 
 # Chirp 
-exponentialChirp = exponential_chirp()
+exponentialChirp = exponential_chirp()/4
 # exponentialChirp = exponential_chirp_chain()
 # OFDM data symbols
 sound = map_to_transmit(K, CP, pilotValue, pilotCarriers, dataCarriers, bitsSP)
 # sound = sound / np.max(sound)
 
 # Known random OFDM block for channel estimation
-knownOFDMBlock = known_ofdm_block(blockNum+noiseBlocks, seedStart-noiseBlocks, mu, K, CP, mappingTable)
+knownOFDMBlock = known_ofdm_block(blockNum, seedStart, mu, K, CP, mappingTable)
 # knownOFDMBlock = knownOFDMBlock / np.max(knownOFDMBlock)
+
+# Known OFDM pre and post 10 blocks for channel estimation
+preOFDMBlock = known_ofdm_block(1, seedStart-1, mu, K, CP, mappingTable)
+postOFDMBlock = known_ofdm_block(1, seedStart+1, mu, K, CP, mappingTable)
 
 # Total data sent over channel
 # dataTotal = np.concatenate((np.zeros(fs), exponentialChirp.ravel(), (np.zeros(fs * time_before_data)), knownOFDMBlock, sound))
 
 # If just using pilot tones, no known OFDM between data
-dataTotal = np.concatenate((np.zeros(fs), exponentialChirp.ravel(), knownOFDMBlock, sound, np.zeros(fs)))
+#dataTotal = np.concatenate((np.zeros(fs), exponentialChirp.ravel(), knownOFDMBlock, sound, np.zeros(fs)))
 
 # If using known OFDM within data blocks
-# dataTotal = np.concatenate((np.zeros(fs), exponentialChirp.ravel(), knownOFDMBlock))
+dataTotal = np.concatenate((np.zeros(fs), exponentialChirp.ravel(), preOFDMBlock, knownOFDMBlock, postOFDMBlock))
 
-# for i in range(numOFDMblocks//5):
-#    dataTotal = np.concatenate((dataTotal, sound[int(i*(N+CP)):int((i+5)*(N+CP))], known_ofdm_block(1, seedStart, mu, K, CP, mappingTable)))
+for i in range(numOFDMblocks//knownInDataFreq):
+   dataTotal = np.concatenate((dataTotal, sound[int(knownInDataFreq*i*(N+CP)):int(knownInDataFreq*(i+1)*(N+CP))], known_ofdm_block(1, seedStart+1, mu, K, CP, mappingTable)))
+dataTotal = np.concatenate((dataTotal, sound[numOFDMblocks//knownInDataFreq*knownInDataFreq*(N+CP):numOFDMblocks*(N+CP)], np.zeros(fs)))
 
-# print(len(dataTotal))
-# dataTotal = np.concatenate((dataTotal, sound[230*(N+CP):235*(N+CP)], np.zeros(fs)))
-
-# print(len(dataTotal))
+print(len(dataTotal))
 
 # save(dataTotal, "audio/text_ldpc_1.wav")
 
@@ -124,7 +123,7 @@ HChannel = np.fft.fft(channelResponse, N)
 # Channel Estimation Test
 
 knownOFDMBlockReceived = channel(knownOFDMBlock, channelResponse, noiseSNR)
-hestAtSymbols, _ = channel_estimate_known_ofdm(knownOFDMBlockReceived, seedStart-noiseBlocks, mappingTable, N, K, CP, mu, plot = False)
+hestAtSymbols, _ = channel_estimate_known_ofdm(knownOFDMBlockReceived, seedStart, mappingTable, N, K, CP, mu, plot = False)
 
 plt.plot(np.arange(N), HChannel, label = 'actual H')
 plt.plot(np.arange(N), abs(hestAtSymbols), label='Estimated H')
@@ -135,60 +134,33 @@ plt.show()
 positionChirpEnd = chirp_synchroniser(ofdmReceived)
 
 # OFDM block channel estimation
-ofdmBlockStart = positionChirpEnd + (N + CP) * noiseBlocks
-ofdmBlockEnd = positionChirpEnd + (N + CP) * blockNum + (N + CP) * noiseBlocks
-dataStart = ofdmBlockEnd 
+ofdmBlockStart = positionChirpEnd + (N + CP) * preblocknum
+ofdmBlockEnd = positionChirpEnd + (N + CP) * blockNum + (N + CP) * preblocknum
+dataStart = ofdmBlockEnd + (N + CP) * postblocknum
 #dataEnd = dataStart + numOFDMblocks * (N + CP)
 
-# If want to use known OFDM in data
-# dataEnd = ofdmBlockEnd + (numOFDMblocks + numOFDMblocks//5) * (N + CP) 
-
-hest, offsetsss = channel_estimate_known_ofdm(ofdmReceived[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
+hest, offset = channel_estimate_known_ofdm(ofdmReceived[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
 plt.plot(np.arange(N), HChannel, label = 'actual H')
 plt.plot(np.arange(N), abs(hest), label='Estimated H')
 plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
 plt.show()
 
-print(offsetsss)
-# plt.plot(ofdmReceived[ofdmBlockEnd:dataEnd])
-# plt.show()
-
+print(offset)
 
 ### EXTRACT METADATA ###
 
 lenData, numOFDMblocks, file_format = extract_Metadata(dataCarriers, ofdmReceived, dataStart, hest, pilotCarriers, numZerosAppend, ldpcCoder, ldpcBlockLength)
 
 # print("estimated length: ", lenData + len_metadata_bits)
+dataEnd = dataStart + (numOFDMblocks + numOFDMblocks//knownInDataFreq) * (N + CP) 
 
-equalizedSymbols, hestAggregate = map_to_decode(ofdmReceived[dataStart:dataStart + numOFDMblocks * (N + CP)], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, offset=0, samplingMismatch=0, pilotImportance=0,
-                                                    pilotValues=True, knownOFDMImportance=0, knownOFDMInData=False)
+equalizedSymbols, hestAggregate = map_to_decode(ofdmReceived[dataStart:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, offset=0, samplingMismatch=0, pilotImportance=0,
+                                                    pilotValues=True, knownOFDMImportance=0, knownOFDMInData=True)
 
 # Noise variances shown for now
 noiseVariances = [1, 1]
-def ldpcDecode(equalizedSymbols, hestAggregate, noiseVariances, numZerosAppend):
-    if QPSK:
-        llrsReceived = return_llrs(equalizedSymbols, hestAggregate, noiseVariances)
-    elif QAM:
-        llrsReceived = return_llrs_16qam(equalizedSymbols, hestAggregate, noiseVariances)[:-numZerosAppend]
-    llrsReceived = np.reshape(llrsReceived[:len(llrsReceived)//648*648], (-1, 2 * ldpcCoder.K))
-    fullOutputData = []
-    i = 0
-    for block in llrsReceived:
-        percentage_0 = i * 100 // len(llrsReceived)
-        i += 1
-        percentage = i * 100 // len(llrsReceived)
-
-        if percentage != percentage_0:
-            print("{}% completed".format(percentage))
-        outputData, _ = ldpcCoder.decode(block)
-        np.place(outputData, outputData>0, int(0))
-        np.place(outputData, outputData<0, int(1))
-        fullOutputData.append(outputData[0:ldpcBlockLength])
-    outputData = np.array(fullOutputData).ravel()
-    return outputData
 if useldpc:
     outputData = ldpcDecode(equalizedSymbols, hestAggregate, noiseVariances, numZerosAppend)
-
 else:
     outputData, hardDecision = demapping(equalizedSymbols, demappingTable)
     for qpsk, hard in zip(equalizedSymbols[0:400], hardDecision[0:400]):
@@ -224,7 +196,7 @@ elif file_format == 3:
 ber = calculateBER(actualData, dataToCsv)
 print("BER: " + str(ber))
 
-# Get BER graph for LDPC
+### Get BER graph for LDPC ###
 
 # SNRs = [1,2,5,10,15,20,25,40,50,100]
 # bers_ldpc = []

@@ -10,7 +10,7 @@ from scipy.io.wavfile import write
 from numpy.random import default_rng
 from globals import *
 
-def assign_data_pilot(K, P, bandLimited = False):
+def assign_data_pilot(K, P, bandLimited = True):
     """ Define the data carriers and pilot tone carriers
     # N - the DFT size
     # K - number of OFDM subcarriers with information
@@ -21,7 +21,12 @@ def assign_data_pilot(K, P, bandLimited = False):
     dataCarriers = np.delete(allCarriers, pilotCarriers)
 
     if bandLimited:
-        dataCarriers = np.delete(dataCarriers, 0)[0:len(dataCarriers)*3//5]
+        dataCarriersBandlimit = []
+        for i in range(len(dataCarriers)):
+            if dataCarriers[i] >=lowerFrequencyBin and dataCarriers[i] < upperFrequencyBin:
+                dataCarriersBandlimit.append(dataCarriers[i])
+        dataCarriers = np.array(dataCarriersBandlimit)
+        # dataCarriers = np.delete(dataCarriers, 0)[0:len(dataCarriers)*3//5]
     else:
         dataCarriers = np.delete(dataCarriers, 0)
 
@@ -30,16 +35,6 @@ def assign_data_pilot(K, P, bandLimited = False):
 
 def mapping(bits):
     """ Maps each batch of bits to a constellation symbol"""
-
-    # mapping_table = {
-    #     (0,0) : (1+1j) / np.sqrt(2),
-    #     (0,1) : (-1+1j) / np.sqrt(2),
-    #     (1,0) : (1-1j) / np.sqrt(2),
-    #     (1,1) : (-1-1j) / np.sqrt(2)
-    # }
-    # demapping_table = {v : k for k, v in mapping_table.items()}
-
-    # return np.array([mapping_table[tuple(b)] for b in bits])
     return np.array([mappingTable[tuple(b)] for b in bits])
 
 
@@ -79,11 +74,11 @@ def map_to_transmit(K, CP, pilotValue, pilotCarriers, dataCarriers, bitsSP):
     """Create full sequence to transmit through speakers"""
 
     soundArray = []
-    for section in bitsSP:
-        qpsk = mapping(section)
-        ofdmData = ofdm_symbol(K, pilotValue, pilotCarriers, dataCarriers, qpsk)
-        ofdmTime = idft(ofdmData)
-        ofdmWithCP = add_cp(CP, ofdmTime)
+    for section in bitsSP: # For each OFDM block worth of information bits
+        qpsk = mapping(section) # Map to constellation values
+        ofdmData = ofdm_symbol(K, pilotValue, pilotCarriers, dataCarriers, qpsk) # Create OFDM block with pilot values and data payloads
+        ofdmTime = idft(ofdmData) # IFT to time values
+        ofdmWithCP = add_cp(CP, ofdmTime) # Add cyclic prefix
         soundArray.append(ofdmWithCP.real)
 
     return np.array(soundArray).ravel()
@@ -91,10 +86,12 @@ def map_to_transmit(K, CP, pilotValue, pilotCarriers, dataCarriers, bitsSP):
 
 def known_ofdm_block(blocknum, randomSeedStart, mu, K, CP, mappingTable):
     """Known OFDM block generation for channel estimation"""
-
     knownOFDMBlock = []
+    rng = default_rng(randomSeedStart) # Standard requires the same OFDM block
     for i in range(blocknum):
-        rng = default_rng(randomSeedStart + i)
+        # rng = default_rng(randomSeedStart + i)
+        if i == blocknum//2:
+            rng = default_rng(randomSeedStart) # Reset random generator so 6-10th blocks are repeat of 1st-5th
         bits = rng.binomial(n=1, p=0.5, size=((K-1)*mu))
         bitsSP = bits.reshape(len(bits)//mu, mu)
 
