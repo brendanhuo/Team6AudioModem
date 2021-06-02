@@ -21,10 +21,9 @@ def assign_data_pilot(K, P, bandLimited = False):
     dataCarriers = np.delete(allCarriers, pilotCarriers)
 
     if bandLimited:
-        dataCarriers = np.delete(dataCarriers, 0)[:len(dataCarriers)*3//5]
+        dataCarriers = np.delete(dataCarriers, 0)[0:len(dataCarriers)*3//5]
     else:
         dataCarriers = np.delete(dataCarriers, 0)
-
     return dataCarriers, pilotCarriers
 
 
@@ -43,7 +42,7 @@ def mapping(bits):
     return np.array([mappingTable[tuple(b)] for b in bits])
 
 
-def ofdm_symbol(K, pilotValue, pilotCarriers, dataCarriers, qpskPayload):
+def ofdm_symbol(K, pilotValue, pilotCarriers, dataCarriers, qpskPayload, pilotSeed = 2000):
     """Assigns pilot values and payload values to OFDM symbol, take reverse complex conjugate and append to end to make signal passband"""
 
     # Rather than use zeros, use random bits to fill space that doesn't have pilots or data payloads

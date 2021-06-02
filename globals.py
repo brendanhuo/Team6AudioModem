@@ -14,7 +14,6 @@ from numpy.random import default_rng
 from scipy.io.wavfile import write
 from scipy import signal
 
-
 # OFDM
 N = 2048 # DFT size
 K = N//2 # number of OFDM subcarriers with information
@@ -41,20 +40,20 @@ if QAM:
     mu = 4
     mappingTable = {
         (0,0,0,0) : -3-3j,
-        (0,0,0,1) : -3-1j,
-        (0,0,1,0) : -3+3j,
-        (0,0,1,1) : -3+1j,
-        (0,1,0,0) : -1-3j,
+        (0,0,0,1) : -1-3j,
+        (0,0,1,0) : +3-3j,
+        (0,0,1,1) : +1-3j,
+        (0,1,0,0) : -3-1j,
         (0,1,0,1) : -1-1j,
-        (0,1,1,0) : -1+3j,
-        (0,1,1,1) : -1+1j,
-        (1,0,0,0) :  3-3j,
-        (1,0,0,1) :  3-1j,
+        (0,1,1,0) : +3-1j,
+        (0,1,1,1) : +1-1j,
+        (1,0,0,0) : -3+3j,
+        (1,0,0,1) : -1+3j,
         (1,0,1,0) :  3+3j,
-        (1,0,1,1) :  3+1j,
-        (1,1,0,0) :  1-3j,
-        (1,1,0,1) :  1-1j,
-        (1,1,1,0) :  1+3j,
+        (1,0,1,1) :  1+3j,
+        (1,1,0,0) : -3+1j,
+        (1,1,0,1) : -1+1j,
+        (1,1,1,0) : +3+1j,
         (1,1,1,1) :  1+1j
     }
     demappingTable = {v : k for k, v in mappingTable.items()}
@@ -91,3 +90,16 @@ length_of_MLE = 11
 
 # Bandlimiting
 useBandLimit = True
+
+# Noise after chirp (to take into account of ramp up)
+noiseBlocks = 0
+
+# Pilot Values
+# allCarriers = np.arange(K)
+# pilotCarriers = allCarriers[1::K//P]
+# pilotSeed = 2000
+# rng = default_rng(pilotSeed)
+# bits = rng.binomial(n=1, p=0.5, size=(K*mu))
+# bitsSP = bits.reshape(len(bits)//mu, mu)
+# symbol = np.array([mappingTable[tuple(b)] for b in bitsSP])
+# pilotValue = symbol[pilotCarriers]

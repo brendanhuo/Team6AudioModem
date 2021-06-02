@@ -111,8 +111,7 @@ def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N
         receivedSymbols = knownOFDMBlock[i*(N+CP): (i+1)*(N+CP)]
         receivedSymbols = removeCP(receivedSymbols, CP, N)
         receivedSymbols = DFT(receivedSymbols, N)
-        print(len(receivedSymbols))
-        print(expectedSymbols[1026])
+       
         for j in range(N):
             # Avoids divide by 0 errors
             if j == N//2 or j == 0:
@@ -152,7 +151,7 @@ def calculate_sampling_mismatch(audio, channelH, N, CP, pilotCarriers, pilotValu
     Hest = channelH
 
     # Remaining offset to rotate by after shifting samples
-    remainingDifference = offset
+    remainingDifference = 0
 
     pilotOffsets = [] # Sample offset for each data block calculated by pilot tones
     pilotHest = 0 # Pilot channel estimate using pilot tones for a data block
@@ -175,7 +174,7 @@ def calculate_sampling_mismatch(audio, channelH, N, CP, pilotCarriers, pilotValu
         pilotHest, pilotOffset = channel_estimate_pilot(data_equalized, pilotCarriers, pilotValue, N)
         pilotOffsets.append(pilotOffset)
         
-        Hest = (1-pilotImportance) * Hest + pilotImportance*pilotHest
+        #Hest = (1-pilotImportance) * Hest + pilotImportance*pilotHest
     
     # Perform linear regression to calculate gradient
     # y = pilotOffsets
@@ -224,7 +223,8 @@ def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotV
     dataArrayEqualized = [] #Output data array
     
     Hest = channelH
-    plt.semilogy(np.arange(len(Hest))*fs/N, abs(Hest), label = '0 data blocks along')
+    if plot:
+        plt.semilogy(np.arange(len(Hest))*fs/N, abs(Hest), label = '0 data blocks along')
     HestAggregate = []
 
     # Remaining offset to rotate by after shifting samples
@@ -276,9 +276,9 @@ def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotV
         # Take weighted sum of each channel estimate contribution - note Hest is the past prediction for the previous data block
         Hest = (1-pilotImportance-knownOFDMImportance) * Hest + pilotImportance*pilotHest + knownOFDMImportance * updateHest
 
-        data_equalized = data/Hest
+        data_equalized = data[0:K][dataCarriers]/Hest[0:K][dataCarriers]
         if appendToData:
-            dataArrayEqualized.append(data_equalized[0:K][dataCarriers])
+            dataArrayEqualized.append(data_equalized)
             HestAggregate.append(Hest[0:K][dataCarriers])
 
         # Plot for 50th and 200th to convince oneself
@@ -408,6 +408,35 @@ def return_llrs(receivedSymbols, channelEstimates, noiseSigma):
     llrs[1::2] = llrsSecondBit
     return llrs
 
+def return_llrs_16qam(receivedSymbols, channelEstimates, noiseSigma):
+    varianceReal = noiseSigma[0]
+    varianceImag = noiseSigma[1]
+    channelEstimateMagnitudes = np.abs(channelEstimates) ** 2
+    receivedSymbolsReal = receivedSymbols.real
+    receivedSymbolsImag = receivedSymbols.imag
+    # First Bit
+    llrFirstBitNum = np.exp((-(receivedSymbolsImag + 1) ** 2) * channelEstimateMagnitudes / (2 * varianceImag)) + np.exp((-(receivedSymbolsImag + 3) ** 2) * channelEstimateMagnitudes / (2 * varianceImag))
+    llrFirstBitDen = np.exp((-(receivedSymbolsImag - 1) ** 2) * channelEstimateMagnitudes / (2 * varianceImag)) + np.exp((-(receivedSymbolsImag - 3) ** 2) * channelEstimateMagnitudes / (2 * varianceImag))
+    llrsFirstBit = np.log(llrFirstBitNum) -  np.log(llrFirstBitDen)
+    # Second Bit
+    llrSecondBitNum = np.exp((-(receivedSymbolsImag + 3) ** 2) * channelEstimateMagnitudes / (2 * varianceImag)) + np.exp((-(receivedSymbolsImag - 3) ** 2) * channelEstimateMagnitudes / (2 * varianceImag))
+    llrSecondBitDen = np.exp((-(receivedSymbolsImag + 1) ** 2) * channelEstimateMagnitudes / (2 * varianceImag)) + np.exp((-(receivedSymbolsImag - 1) ** 2) * channelEstimateMagnitudes / (2 * varianceImag))
+    llrsSecondBit = np.log(llrSecondBitNum) - np.log(llrSecondBitDen)
+    # Third bit
+    llrThirdBitNum = np.exp((-(receivedSymbolsReal + 1) ** 2) * channelEstimateMagnitudes / (2 * varianceReal)) + np.exp((-(receivedSymbolsReal + 3) ** 2) * channelEstimateMagnitudes / (2 * varianceReal))
+    llrThirdBitDen = np.exp((-(receivedSymbolsReal - 1) ** 2) * channelEstimateMagnitudes / (2 * varianceReal)) + np.exp((-(receivedSymbolsReal - 3) ** 2) * channelEstimateMagnitudes / (2 * varianceReal))
+    llrsThirdBit = np.log(llrThirdBitNum) - np.log(llrThirdBitDen)
+    # Fourth bit
+    llrFourthBitNum = np.exp((-(receivedSymbolsReal + 3) ** 2) * channelEstimateMagnitudes / (2 * varianceReal)) + np.exp((-(receivedSymbolsReal - 3) ** 2) * channelEstimateMagnitudes / (2 * varianceReal))
+    llrFourthBitDen = np.exp((-(receivedSymbolsReal + 1) ** 2) * channelEstimateMagnitudes / (2 * varianceReal)) + np.exp((-(receivedSymbolsReal - 1) ** 2) * channelEstimateMagnitudes / (2 * varianceReal))
+    llrsFourthBit = np.log(llrFourthBitNum) - np.log(llrFourthBitDen)
+    
+    llrs = np.empty((llrsFirstBit.size + llrsSecondBit.size + llrsThirdBit.size + llrsFourthBit.size,), dtype=llrsFirstBit.dtype)
+    llrs[0::4] = llrsFirstBit
+    llrs[1::4] = llrsSecondBit
+    llrs[2::4] = llrsThirdBit
+    llrs[3::4] = llrsFourthBit
+    return llrs
 
 def demapping(qpsk, demappingTable):
     """Demaps from demodulated constellation to original bit sequence"""

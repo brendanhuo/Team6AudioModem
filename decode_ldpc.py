@@ -5,11 +5,12 @@ from receiver import *
 from chirp import *
 from channel import * 
 from ldpc_jossy.py import ldpc
+from audio_utils import *
 
 # Import text file for testing
 with open("./text/asyoulik.txt") as f:
     contents = f.read()
-    contents = contents[:len(contents)//4] # Make sure this is actually the data you sent 
+    contents = contents[:len(contents)//2] # Make sure this is actually the data you sent 
 
 ba = bitarray.bitarray()
 ba.frombytes(contents.encode('utf-8'))
@@ -35,13 +36,13 @@ for i in range(len(ba)):
 ba = np.array(ldpcConvert).ravel()
 
 # Pad ba to fill full OFDM blocks - use random data 
-numZerosAppend = len(dataCarriers)*2 - (len(ba) - len(ba)//mu//len(dataCarriers) * len(dataCarriers) * mu)
+numZerosAppend = len(dataCarriers)*mu - (len(ba) - len(ba)//mu//len(dataCarriers) * len(dataCarriers) * mu)
 ba = np.append(ba, np.zeros(numZerosAppend))
 bitsSP = ba.reshape((len(ba)//mu//len(dataCarriers), len(dataCarriers), mu))
 numOFDMblocks = len(bitsSP)
 
 # MAKE SURE THAT THE INPUT HAS GLOBAL VALUES THAT MATCH
-receivedSound = np.load("audio/brendan/asyoulikeit_rec1_125_2-3_ldpc.npy")
+receivedSound = audioDataFromFile("audio/brendan/clean_sound/TASCAM_0199.wav")
 plt.plot(np.arange(len(receivedSound))/fs, receivedSound)
 plt.title('Received Sound'); plt.xlabel('Time/s'); plt.ylabel('Sound amplitude')
 plt.show()
@@ -50,8 +51,8 @@ plt.show()
 positionChirpEnd = chirp_synchroniser(receivedSound)
 
 # OFDM block channel estimation
-ofdmBlockStart = positionChirpEnd  
-ofdmBlockEnd = positionChirpEnd  + (N + CP) * blockNum 
+ofdmBlockStart = positionChirpEnd + (N + CP) * noiseBlocks
+ofdmBlockEnd = positionChirpEnd  + (N + CP) * blockNum + (N + CP) * noiseBlocks
 dataStart = ofdmBlockEnd
 dataEnd = ofdmBlockEnd + numOFDMblocks * (N + CP) # number of data OFDM blocks we are sending should be determined by metadata
 
@@ -68,11 +69,10 @@ plt.title('Impulse response'); plt.xlabel('Time / s'); plt.ylabel('Amplitude of 
 plt.show()
 
 # Correct for synchronization error
-ofdmBlockStart = positionChirpEnd + floor(offset) 
-ofdmBlockEnd = positionChirpEnd  + (N + CP) * blockNum + floor(offset) 
+ofdmBlockStart = positionChirpEnd + floor(offset) + (N + CP) * noiseBlocks
+ofdmBlockEnd = positionChirpEnd  + (N + CP) * blockNum + floor(offset) + (N + CP) * noiseBlocks
 dataStart = ofdmBlockEnd
 dataEnd = ofdmBlockEnd + numOFDMblocks * (N + CP) # number of data OFDM blocks we are sending should be determined by metadata
-
 
 # Remaining offset to rotate
 offset = offset - floor(offset)
@@ -81,7 +81,7 @@ offset = offset - floor(offset)
 hest, offset = channel_estimate_known_ofdm(receivedSound[ofdmBlockStart: ofdmBlockEnd], seedStart, mappingTable, N, K, CP, mu)
 print('New synchronization offset (for rotation): ' + str(offset))
 
-plt.semilogy(np.arange(N)*fs / N, abs(hest))
+plt.semilogy(dataCarriers*fs / N, abs(hest[dataCarriers]))
 plt.grid(True); plt.title('Estimated H via known OFDM'); plt.xlabel('Frequency/Hz'); plt.ylabel('$|H(f)|$'); 
 plt.show()
 
@@ -96,7 +96,6 @@ print('Sampling mismatch is: ' + str(sampleMismatch))
 
 # Calculate equalized symbols using pilot tone assisted channel frequency response estimate
 equalizedSymbols, hestAggregate = map_to_decode(receivedSound[dataStart:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, offset = offset, samplingMismatch = sampleMismatch, pilotImportance = 0.5, pilotValues = True)
-
 
 # outputData, hardDecision = demapping(equalizedSymbols, demappingTable)
 
@@ -135,3 +134,5 @@ print(text_from_bits(demodulatedOutput))
 # Calculate bit error rate (BER)
 ber = calculateBER(actualData, dataToCsv)
 print("Bit Error Rate:" + str(ber))
+
+np.save('text_decoded6.npy', dataToCsv)
