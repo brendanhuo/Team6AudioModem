@@ -502,7 +502,7 @@ def extract_Metadata(dataCarriers, ofdmReceived, dataStart, hest, pilotCarriers,
     file_len = bin(int(''.join(map(str, file_len)), 2))[2:]
     print(file_len)
     # print("file length raw data determined via aggregate", file_len)
-    file_len = round((int(file_len, 2) / hamming_distance))
+    file_len = round((int(file_len, 2) / multiplier))
     print("File length in denary: ", file_len)
 
     # File format
@@ -522,7 +522,7 @@ def extract_Metadata(dataCarriers, ofdmReceived, dataStart, hest, pilotCarriers,
             file_format[i] = 0
     file_format = bin(int(''.join(map(str, file_format)), 2))[2:]
     # print("file length raw data determined via aggregate", file_len)
-    file_format = round((int(file_format, 2) / hamming_distance))
+    file_format = round((int(file_format, 2) / multiplier))
     print("File format in denary: ", file_format)
 
     len_metadata_bits = len_file_len * num_file_len + len_file_format * num_file_format

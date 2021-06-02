@@ -114,7 +114,7 @@ def append_Metadata(ba, file, lenData):
     # Minimum distance encoding
 
     # File length Data
-    step_value = hamming_distance
+    step_value = multiplier
     if step_value * lenData > 2**len_file_len:
         raise ValueError("Insufficient memory assinged to Metadata: {} bits required, but only {} allocated".format(step_value * lenData, 2**len_file_len))
 
@@ -128,7 +128,7 @@ def append_Metadata(ba, file, lenData):
 
     file_format = file_formats[file[-3:]]
 
-    step_value = hamming_distance
+    step_value = multiplier
     if step_value * file_format > 2**len_file_format:
         raise ValueError("Insufficient memory assinged to Metadata: {} bits required, but only {} allocated".format(step_value * file_format, 2**len_file_format))
 
