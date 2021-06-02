@@ -87,12 +87,12 @@ def map_to_transmit(K, CP, pilotValue, pilotCarriers, dataCarriers, bitsSP):
 def known_ofdm_block(blocknum, randomSeedStart, mu, K, CP, mappingTable):
     """Known OFDM block generation for channel estimation"""
     knownOFDMBlock = []
-    rng = default_rng(randomSeedStart) # Standard requires the same OFDM block
+    rng = np.random.default_rng(randomSeedStart) # Standard requires the same OFDM block
     for i in range(blocknum):
         # rng = default_rng(randomSeedStart + i)
         if i == blocknum//2:
-            rng = default_rng(randomSeedStart) # Reset random generator so 6-10th blocks are repeat of 1st-5th
-        bits = rng.binomial(n=1, p=0.5, size=((K-1)*mu))
+            rng = np.random.default_rng(randomSeedStart) # Reset random generator so 6-10th blocks are repeat of 1st-5th
+        bits = rng.integers(low=0, high=2, size=(K-1)*mu)
         bitsSP = bits.reshape(len(bits)//mu, mu)
 
         symbol = np.array([mappingTable[tuple(b)] for b in bitsSP])

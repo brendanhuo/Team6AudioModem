@@ -8,6 +8,8 @@ from chirp import *
 from channel import *
 from audio_utils import *
 
+usdldpc = False 
+
 image_path = "./image/autumn_small.tif"
 ba, image_shape = image2bits(image_path, plot = True)
 imageData = ba

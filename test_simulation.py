@@ -6,7 +6,7 @@ from chirp import *
 from channel import *
 from audio_utils import *
 
-useldpc = True
+useldpc = False
 usemetadata = False
 dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = useBandLimit)
 
@@ -110,7 +110,7 @@ plt.plot(dataTotal)
 plt.title("Signal to send"); plt.xlabel('Sample number'); plt.ylabel('Sound amplitude');
 plt.show()
 
-write("audio/Brendan/testing/input_qpsk_22000_{}.wav".format(actualfileformat), fs, dataTotal)
+#write("audio/Brendan/testing/input_qpsk_22000_{}.wav".format(actualfileformat), fs, dataTotal)
 
 ### CHANNEL ###
 
@@ -134,7 +134,7 @@ plt.show()
 
 # Symbol Recovery Test
 positionChirpEnd = chirp_synchroniser(ofdmReceived[0:len(ofdmReceived)//2])
-
+print(positionChirpEnd)
 # OFDM block channel estimation
 ofdmBlockStart = positionChirpEnd + (N + CP) * preblocknum
 ofdmBlockEnd = positionChirpEnd + (N + CP) * blockNum + (N + CP) * preblocknum
@@ -150,10 +150,9 @@ plt.show()
 print(offset)
 
 ### EXTRACT METADATA ###
-lenData, numOFDMblocks, file_format = extract_Metadata(dataCarriers, ofdmReceived, dataStart, hest, pilotCarriers)
-
 # print("estimated length: ", lenData + len_metadata_bits)
 if usemetadata:
+    lenData, numOFDMblocks, file_format = extract_Metadata(dataCarriers, ofdmReceived, dataStart, hest, pilotCarriers)
     dataEnd = dataStart + (numOFDMblocks + numOFDMblocks//knownInDataFreq) * (N + CP)
     lenAppendldpc = ((lenData) // ldpcBlockLength + 1) * ldpcBlockLength - lenData
     lenTotalba = lenData + lenAppendldpc
@@ -183,6 +182,7 @@ if usemetadata:
     dataToCsv = np.array(outputData, dtype=int).ravel()[len_metadata_bits:len_metadata_bits + lenData]
 else:
     dataToCsv = np.array(outputData, dtype=int).ravel()[:lenData0]
+file_format = 1
 if file_format == 1:
     demodulatedOutput = ''.join(str(e) for e in dataToCsv)
     print(text_from_bits(demodulatedOutput))
