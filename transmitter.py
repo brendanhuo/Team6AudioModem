@@ -119,21 +119,13 @@ def append_Metadata(ba, file, lenData):
     file_len_encoded = [int(i) for i in str(file_len_encoded)]
     file_len_data = np.concatenate((np.zeros(len_file_len - len(file_len_encoded)).tolist(), file_len_encoded))
     file_len_data = np.tile(file_len_data, num_file_len)
-    # print("file length data: ", file_len_data, len(file_len_data))
+    print("file length data: ", file_len_data, len(file_len_data))
 
     # File format Data
 
-    file_format = file_formats[file[-3:]]
+    file_format = np.array(file_formats[file[-3:]])
+    file_format.reshape(-1)
 
-    step_value = multiplier
-    if step_value * file_format > 2**len_file_format:
-        raise ValueError("Insufficient memory assinged to Metadata: {} bits required, but only {} allocated".format(step_value * file_format, 2**len_file_format))
+    print("file format data: ", file_format, len(file_format))
 
-    file_format_encoded = bin(step_value * file_format)[2:]
-    file_format_data = np.concatenate((np.zeros(len_file_format - len(file_format_encoded)), np.array([int(i, 2) for i in file_format_encoded])))
-    file_format_data = np.tile(file_format_data, num_file_format)
-    # print("file format data: ", file_format_data, len(file_format_data))
-
-    metadata = np.concatenate((file_len_data, file_format_data, ba))
-
-    return metadata
+    return np.concatenate((file_format, file_len_data, ba))
