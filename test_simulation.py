@@ -84,8 +84,8 @@ knownOFDMBlock = known_ofdm_block(blockNum, seedStart, mu, K, CP, mappingTable)
 # knownOFDMBlock = knownOFDMBlock / np.max(knownOFDMBlock)
 
 # Known OFDM pre and post 10 blocks for channel estimation
-preOFDMBlock = known_ofdm_block(1, seedStart-1, mu, K, CP, mappingTable)
-postOFDMBlock = known_ofdm_block(1, seedStart+1, mu, K, CP, mappingTable)
+preOFDMBlock = known_ofdm_block(preblocknum, seedStart-1, mu, K, CP, mappingTable)
+postOFDMBlock = known_ofdm_block(postblocknum, seedStart+1, mu, K, CP, mappingTable)
 
 # Total data sent over channel
 # dataTotal = np.concatenate((np.zeros(fs), exponentialChirp.ravel(), (np.zeros(fs * time_before_data)), knownOFDMBlock, sound))
@@ -98,7 +98,7 @@ dataTotal = np.concatenate((np.zeros(fs), exponentialChirp.ravel(), preOFDMBlock
 
 for i in range(numOFDMblocks//knownInDataFreq):
    dataTotal = np.concatenate((dataTotal, sound[int(knownInDataFreq*i*(N+CP)):int(knownInDataFreq*(i+1)*(N+CP))], known_ofdm_block(1, seedStart+1, mu, K, CP, mappingTable)))
-dataTotal = np.concatenate((dataTotal, sound[numOFDMblocks//knownInDataFreq*knownInDataFreq*(N+CP):numOFDMblocks*(N+CP)], np.zeros(fs)))
+dataTotal = np.concatenate((dataTotal, sound[numOFDMblocks//knownInDataFreq*knownInDataFreq*(N+CP):numOFDMblocks*(N+CP)], exponentialChirp.ravel(), np.zeros(fs)))
 
 print(len(dataTotal))
 
@@ -108,7 +108,7 @@ plt.plot(dataTotal)
 plt.title("Signal to send"); plt.xlabel('Sample number'); plt.ylabel('Sound amplitude');
 plt.show()
 
-write("audio/Brendan/testing/input_{}.wav".format(actualfileformat), fs, dataTotal)
+write("audio/Brendan/testing/input_16qam_{}.wav".format(actualfileformat), fs, dataTotal)
 
 ### CHANNEL ###
 
@@ -131,7 +131,7 @@ plt.grid(True); plt.xlabel('Carrier index'); plt.ylabel('$|H(f)|$'); plt.legend(
 plt.show()
 
 # Symbol Recovery Test
-positionChirpEnd = chirp_synchroniser(ofdmReceived)
+positionChirpEnd = chirp_synchroniser(ofdmReceived[0:len(ofdmReceived)//2])
 
 # OFDM block channel estimation
 ofdmBlockStart = positionChirpEnd + (N + CP) * preblocknum
