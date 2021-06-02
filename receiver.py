@@ -620,4 +620,6 @@ def extract_Metadata(dataCarriers, ofdmReceived, dataStart, hest, pilotCarriers)
     # LDPC length is *2 + padded 0's so multiple of LDPC block length
     num_ofdm_blocks = math.ceil(math.ceil((file_len + len_metadata_bits) / ldpcBlockLength) * (file_len + len_metadata_bits) * 2 / len(dataCarriers))
 
+    print("FILE FORMAT: ", file_format)
+
     return file_len, num_ofdm_blocks, file_format

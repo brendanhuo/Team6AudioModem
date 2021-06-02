@@ -125,6 +125,7 @@ def append_Metadata(ba, file, lenData):
 
     file_format = np.array(file_formats[file[-3:]])
     file_format.reshape(-1)
+    file_format = np.tile(file_format, num_file_format)
 
     print("file format data: ", file_format, len(file_format))
 
