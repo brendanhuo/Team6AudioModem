@@ -16,13 +16,13 @@ useldpc = True
 dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = useBandLimit)
 
 # MAKE SURE THAT THE INPUT HAS GLOBAL VALUES THAT MATCH
-receivedSound = audioDataFromFile("audio/brendan/testing/autumn_standard.wav")
+receivedSound = audioDataFromFile("audio/brendan/testing/autumn_standard_16qam.wav")
 plt.plot(np.arange(len(receivedSound))/fs, receivedSound)
 plt.title('Received Sound'); plt.xlabel('Time/s'); plt.ylabel('Sound amplitude')
 plt.show()
 
 # Symbol Recovery Test
-positionChirpEnd = chirp_synchroniser(receivedSound)
+positionChirpEnd = chirp_synchroniser(receivedSound[0:len(receivedSound)//2])
 
 # OFDM block channel estimation
 ofdmBlockStart = positionChirpEnd + (N + CP) * preblocknum

@@ -27,8 +27,8 @@ pilotValue = 1+1j # STANDARD
 lowerFrequencyBin = 50 # Inclusive
 upperFrequencyBin = 700 # Exclusive
 
-QPSK = True
-QAM = False
+QPSK = False
+QAM = True
 
 # QPSK
 if QPSK:
@@ -105,7 +105,7 @@ length_of_MLE = 11
 useBandLimit = True
 
 # Blocks pre and post 10 known OFDM
-preblocknum = 1
+preblocknum = 10
 postblocknum = 1
 
 #Known OFDM in data frequency 

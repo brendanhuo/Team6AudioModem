@@ -90,7 +90,8 @@ def get_clean_offset(hest, dropFront = 0, dropBack = -1, plot = False):
         plt.plot(y_fit, label = 'linear regression')
         plt.plot(np.gradient(np.gradient(yhat)) * 100, label = 'second derivative (scaled)')
         plt.plot(np.unwrap(np.angle(hest)), label = 'Hest')
-        plt.legend(); plt.title('Phase shift of H'); plt.xlabel('Frequency bins'); plt.ylabel('$|H(f)|$'); plt.show()
+        # plt.plot(np.angle(hest))
+        plt.legend(); plt.title('Phase shift of H'); plt.xlabel('Frequency bins'); plt.ylabel('Phase shift / rads'); plt.show()
 
     return offset, y_fit
 
@@ -123,7 +124,7 @@ def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N
                 hestAtSymbols[j] = (hestAtSymbols[j] * i + div) / (i + 1) # Average over past OFDM blocks
     if plot:
         plt.semilogy(np.arange(N)*fs / N, abs(hestAtSymbols))
-        plt.grid(True); plt.title('Estimated H via known OFDM'); plt.xlabel('Frequency/Hz'); plt.ylabel('$|H(f)|$'); plt.legend(fontsize=10)
+        plt.grid(True); plt.title('Estimated H via known OFDM'); plt.xlabel('Frequency/Hz'); plt.ylabel('$|H(f)|$')
         plt.show()
 
         hestImpulse = np.fft.ifft(hestAtSymbols)[0:N//2]
@@ -460,7 +461,7 @@ def return_llrs_16qam(receivedSymbols, channelEstimates, noiseSigma):
 
 def ldpcDecode(equalizedSymbols, hestAggregate, noiseVariances, numZerosAppend):
     if QPSK:
-        llrsReceived = return_llrs_qpsk(equalizedSymbols, hestAggregate, noiseVariances)
+        llrsReceived = return_llrs_qpsk(equalizedSymbols, hestAggregate, noiseVariances)[:-numZerosAppend]
     elif QAM:
         llrsReceived = return_llrs_16qam(equalizedSymbols, hestAggregate, noiseVariances)[:-numZerosAppend]
     llrsReceived = np.reshape(llrsReceived[:len(llrsReceived)//(2*ldpcBlockLength)*2*ldpcBlockLength], (-1, 2 * ldpcBlockLength))
@@ -511,13 +512,16 @@ def extract_Metadata(dataCarriers, ofdmReceived, dataStart, hest, pilotCarriers)
                                                     pilotValues=True, knownOFDMImportance=0, knownOFDMInData=False)
     # Noise variances shown for now
     noiseVariances = [1, 1]
-    llrsReceived = return_llrs_qpsk(equalizedSymbols, hestAggregate, noiseVariances)
-    llrsReceived = np.reshape(llrsReceived[:len(llrsReceived) // 648 * 648], (-1, 2 * ldpcCoder.K))
+    if QPSK:
+        llrsReceived = return_llrs_qpsk(equalizedSymbols, hestAggregate, noiseVariances)
+    elif QAM:
+        llrsReceived = return_llrs_16qam(equalizedSymbols, hestAggregate, noiseVariances)
+    llrsReceived = np.reshape(llrsReceived[:len(llrsReceived)//(2*ldpcBlockLength)*2*ldpcBlockLength], (-1, 2 * ldpcBlockLength))
     fullOutputData = []
     for block in llrsReceived:
         outputData, _ = ldpcCoder.decode(block)
-        np.place(outputData, outputData > 0, int(0))
-        np.place(outputData, outputData < 0, int(1))
+        np.place(outputData, outputData>0, int(0))
+        np.place(outputData, outputData<0, int(1))
         fullOutputData.append(outputData[0:ldpcBlockLength])
     outputData = np.array(fullOutputData).ravel()
 
