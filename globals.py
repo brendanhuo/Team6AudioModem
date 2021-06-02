@@ -95,7 +95,7 @@ useBandLimit = True
 
 # Metadata
 metadata = True
-hamming_distance = 128
+hamming_distance = 17
 
 len_file_len = 32  # bits
 num_file_len = 1  # number of repeats
