@@ -8,11 +8,15 @@ from chirp import *
 from channel import *
 from audio_utils import *
 
+image_path = "./image/autumn_small.tif"
+ba, image_shape = image2bits(image_path, plot = True)
+imageData = ba
+
 useldpc = True
 dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = useBandLimit)
 
 # MAKE SURE THAT THE INPUT HAS GLOBAL VALUES THAT MATCH
-receivedSound = audioDataFromFile("audio/brendan/testing/TASCAM_0199.wav")
+receivedSound = audioDataFromFile("audio/brendan/testing/autumn_standard.wav")
 plt.plot(np.arange(len(receivedSound))/fs, receivedSound)
 plt.title('Received Sound'); plt.xlabel('Time/s'); plt.ylabel('Sound amplitude')
 plt.show()
@@ -29,9 +33,9 @@ hest, offset = channel_estimate_known_ofdm(receivedSound[ofdmBlockStart: ofdmBlo
 print('Synchronization offset is: ' + str(offset))
 
 # Correct for synchronization error
-ofdmBlockStart = positionChirpEnd + floor(offset) 
-ofdmBlockEnd = positionChirpEnd  + (N + CP) * blockNum + floor(offset)
-dataStart = ofdmBlockEnd
+ofdmBlockStart = positionChirpEnd + floor(offset) + (N + CP) * preblocknum
+ofdmBlockEnd = positionChirpEnd  + (N + CP) * blockNum + floor(offset) + (N + CP) * preblocknum
+dataStart = ofdmBlockEnd + (N + CP) * postblocknum
 
 # Remaining offset to rotate
 offset = offset - floor(offset)
@@ -91,4 +95,6 @@ elif file_format == 3:
     print(len(dataToCsv)/fs)
     play(dataToCsv)
 
+ber = calculateBER(imageData, dataToCsv)
+print("Bit Error Rate:" + str(ber))
 
