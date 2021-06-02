@@ -435,6 +435,7 @@ def chirp_synchroniser(audio):
 
     return position
 
+
 # noiseSigma is a tuple of (noiseSigma.real, noiseSignal.imag)
 def return_llrs_qpsk(receivedSymbols, channelEstimates, noiseSigma):
     varianceReal = noiseSigma[0]
@@ -451,6 +452,7 @@ def return_llrs_qpsk(receivedSymbols, channelEstimates, noiseSigma):
     llrs[0::2] = llrsFirstBit
     llrs[1::2] = llrsSecondBit
     return llrs
+
 
 def return_llrs_16qam(receivedSymbols, channelEstimates, noiseSigma):
     varianceReal = noiseSigma[0]
@@ -482,6 +484,7 @@ def return_llrs_16qam(receivedSymbols, channelEstimates, noiseSigma):
     llrs[3::4] = llrsFourthBit
     return llrs
 
+
 def ldpcDecode(equalizedSymbols, hestAggregate, noiseVariances, numZerosAppend):
     if QPSK:
         llrsReceived = return_llrs_qpsk(equalizedSymbols, hestAggregate, noiseVariances)[:-numZerosAppend]
@@ -503,6 +506,7 @@ def ldpcDecode(equalizedSymbols, hestAggregate, noiseVariances, numZerosAppend):
         fullOutputData.append(outputData[0:ldpcBlockLength])
     outputData = np.array(fullOutputData).ravel()
     return outputData
+
 
 def demapping(qpsk, demappingTable):
     """Demaps from demodulated constellation to original bit sequence"""
@@ -548,12 +552,46 @@ def extract_Metadata(dataCarriers, ofdmReceived, dataStart, hest, pilotCarriers)
         fullOutputData.append(outputData[0:ldpcBlockLength])
     outputData = np.array(fullOutputData).ravel()
 
-    print("outputData: ", outputData)
+    # print("outputData: ", outputData)
+
+    # File format
+    file_format_data = outputData[:(len_file_format * num_file_format)]
+
+    # file_format = bin(int(''.join(map(str, file_format)), 2))[2:]
+
+    # MLE over all received file_format transfers
+    estimates = [0] * num_file_format
+    for i in range(num_file_format):
+        estimates[i] = file_format_data[i * len_file_format:(i + 1) * len_file_format]
+
+    file_format = [0] * len_file_format
+    for i in range(len_file_format):
+        total = 0
+        for j in range(len(estimates)):
+            total += estimates[j][i]
+        if total / len(estimates) > 0.5:
+            file_format[i] = 1
+        else:
+            file_format[i] = 0
+
+    # Minimum distance decoder
+
+    hamming_distances = []
+    for format in file_formats:
+        hamming_distance = 0
+        for i in range(len(format)):
+            if file_format[i] != format[i]:
+                hamming_distance += 1
+        hamming_distances.append(hamming_distance)
+    val, idx = min((val, idx) for (idx, val) in enumerate(hamming_distances))
+    file_format = list(file_formats.keys())[idx]
+
+    print("File format detected: ", file_format)
 
     # File length
-    file_len_data = outputData[:len_file_len * num_file_len]
-    print(file_len_data)
-    print("extracted file length raw data (first estimate)", file_len_data[:len_file_len])
+    file_len_data = outputData[(len_file_format * num_file_format):(len_file_format * num_file_format) + (len_file_len * num_file_len)]
+
+    # MLE over all received file_length transfers
     estimates = [0]*num_file_len
     for i in range(num_file_len):
         estimates[i] = file_len_data[i * len_file_len:(i + 1) * len_file_len]
@@ -569,32 +607,8 @@ def extract_Metadata(dataCarriers, ofdmReceived, dataStart, hest, pilotCarriers)
             file_len[i] = 0
 
     file_len = bin(int(''.join(map(str, file_len)), 2))[2:]
-    print(file_len)
-    # print("file length raw data determined via aggregate", file_len)
     file_len = round((int(file_len, 2) / multiplier))
     print("File length in denary: ", file_len)
-
-    # File format
-    file_format_data = outputData[(len_file_len * num_file_len):(len_file_len * num_file_len) + (len_file_format * num_file_format)]
-    estimates = [0] * num_file_format
-    for i in range(num_file_format):
-        estimates[i] = file_format_data[i * len_file_format:(i + 1) * len_file_format]
-
-    file_format = [0] * len_file_format
-    for i in range(len_file_format):
-        total = 0
-        for j in range(len(estimates)):
-            total += estimates[j][i]
-        if total / len(estimates) > 0.5:
-            file_format[i] = 1
-        else:
-            file_format[i] = 0
-    file_format = bin(int(''.join(map(str, file_format)), 2))[2:]
-    # print("file length raw data determined via aggregate", file_len)
-    file_format = round((int(file_format, 2) / multiplier))
-    print("File format in denary: ", file_format)
-
-    len_metadata_bits = len_file_len * num_file_len + len_file_format * num_file_format
 
     # LDPC length is *2 + padded 0's so multiple of LDPC block length
     num_ofdm_blocks = math.ceil(math.ceil((file_len + len_metadata_bits) / ldpcBlockLength) * (file_len + len_metadata_bits) * 2 / len(dataCarriers))

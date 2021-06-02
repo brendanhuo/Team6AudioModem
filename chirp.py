@@ -8,17 +8,11 @@ def exponential_chirp(chirp_length=chirp_length, f2=f2, f1=f1, window_strength=w
     """Produces exponential chirp with exponential envelope"""
 
     T = chirp_length
-    t_list = np.linspace(0, T, int(round(T * fs)), False)
-    profile = []
+    t = np.linspace(0, T, T * fs)
     r = f2/f1
 
     # Calculate Sine Sweep time domain values
-    for t in t_list:
-        value = math.sin(2*math.pi*T*f1*((r**(t/T)-1)/(math.log(r, math.e))))*(1-math.e**(-window_strength*t))*(1-math.e**(window_strength*(t-T)))
-        profile.append(value)
-
-    # Format
-    profile = np.array(profile)
+    profile = np.sin(2*np.pi*T*f1*((r**(t/T)-1)/(np.log(r))))*(1-np.e**(-window_strength*t))*(1-np.e**(window_strength*(t-T)))
 
     return profile
 
