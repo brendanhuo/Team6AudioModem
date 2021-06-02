@@ -112,7 +112,7 @@ postblocknum = 1
 knownInDataFreq = 10 #Every 10 data blocks is one known OFDM
 
 # Metadata
-metadata = False
+metadata = True
 multiplier = 1
 
 len_file_len = 32  # bits

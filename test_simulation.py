@@ -6,8 +6,8 @@ from chirp import *
 from channel import *
 from audio_utils import *
 
-useldpc = False
-usemetadata = False
+useldpc = True
+usemetadata = True
 dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = useBandLimit)
 
 ### TRANSMITTER ###
