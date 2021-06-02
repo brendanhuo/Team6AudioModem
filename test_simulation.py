@@ -6,7 +6,7 @@ from chirp import *
 from channel import *
 from audio_utils import *
 
-useldpc = True
+useldpc = False
 usemetadata = True
 dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = useBandLimit)
 
@@ -182,13 +182,13 @@ if usemetadata:
     dataToCsv = np.array(outputData, dtype=int).ravel()[len_metadata_bits:len_metadata_bits + lenData]
 else:
     dataToCsv = np.array(outputData, dtype=int).ravel()[:lenData0]
-file_format = 1
+    file_format = 1
 
-if file_format == 'txt':
+if str(file_format) == 'txt':
     demodulatedOutput = ''.join(str(e) for e in dataToCsv)
     print(text_from_bits(demodulatedOutput))
 
-elif file_format == 'tif':
+elif str(file_format) == 'tif':
     byte_array = []
     for i in range(len(dataToCsv) // 8):
         demodulatedOutput = ''.join(str(e) for e in dataToCsv[8 * i:8 * (i + 1)])
@@ -204,10 +204,13 @@ elif file_format == 'wav':
     save(dataToCsv, "audio/James/Decoded Outputs/output.wav{}".format(file_format))
     print(len(dataToCsv) / fs)
     play(dataToCsv)
+else:
+    raise ValueError("File format not recognised you idiot: content: {}, type: {}".format(file_format, type(file_format)))
 
+if not usemetadata:
 # print("lengths: ", lenData, len(dataToCsv), len(actualData))
-demodulatedOutput = ''.join(str(e) for e in dataToCsv)
-print(text_from_bits(demodulatedOutput))
+    demodulatedOutput = ''.join(str(e) for e in dataToCsv)
+    print(text_from_bits(demodulatedOutput))
 ber = calculateBER(actualData, dataToCsv)
 print("BER: " + str(ber))
 
