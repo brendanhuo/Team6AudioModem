@@ -64,7 +64,6 @@ def play(data, fs=fs):
     sd.play(data, fs)
     print("playing")
     print(sd.default.device)
-    print(data)
     sd.wait()  # Wait until file is done playing
 
 
@@ -76,7 +75,6 @@ def playFile(filename):
     sd.play(data, fs)
     print("playing")
     print(sd.default.device)
-    print(data)
     sd.wait()  # Wait until file is done playing
     print("done")
 
