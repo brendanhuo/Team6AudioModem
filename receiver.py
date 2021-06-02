@@ -100,13 +100,13 @@ def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N
 
     numberOfBlocks = len(knownOFDMBlock) // (N+CP)
     hestAtSymbols = np.zeros(N, dtype = complex) # estimate of the channel gain at particular frequency bins
-    rng = np.random.default_rng(randomSeedStart) # Used for standardised audio modem
+    rng = default_rng(randomSeedStart) # Used for standardised audio modem
     for i in range(numberOfBlocks):
         # Retrace back the original seed
         # rng = default_rng(randomSeedStart + i)
         if i == numberOfBlocks // 2:
-            rng = np.random.default_rng(randomSeedStart)
-        bits = bits = rng.integers(low=0, high=2, size=(K-1)*mu)
+            rng = default_rng(randomSeedStart)
+        bits = rng.integers(low=0, high=2, size=(K-1)*mu)
         bitsSP = bits.reshape(len(bits)//mu, mu)
         symbol = np.array([mappingTable[tuple(b)] for b in bitsSP])
         expectedSymbols = np.concatenate(([0], symbol, [0], np.conj(symbol)[::-1]))
@@ -135,15 +135,18 @@ def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N
     return hestAtSymbols, offset
 
 def noise_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N, K, CP, mu, plot = False):
-    """Channel estimate using known OFDM block symbols"""
+    """Noise estimate using known OFDM block symbols"""
 
     numberOfBlocks = len(knownOFDMBlock) // (N+CP)
     hestAtSymbols = np.zeros(N, dtype = complex) # estimate of the channel gain at particular frequency bins
 
+    rng = default_rng(randomSeedStart) # Used for standardised audio modem
     for i in range(numberOfBlocks):
         # Retrace back the original seed
-        rng = default_rng(randomSeedStart + i)
-        bits = rng.binomial(n=1, p=0.5, size=((K-1)*mu))
+        # rng = default_rng(randomSeedStart + i)
+        if i == numberOfBlocks // 2:
+            rng = default_rng(randomSeedStart)
+        bits = rng.integers(low=0, high=2, size=(K-1)*mu)
         bitsSP = bits.reshape(len(bits)//mu, mu)
         symbol = np.array([mappingTable[tuple(b)] for b in bitsSP])
         expectedSymbols = np.concatenate(([0], symbol, [0], np.conj(symbol)[::-1]))
@@ -160,10 +163,13 @@ def noise_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N, 
                 hestAtSymbols[j] = (hestAtSymbols[j] * i + div) / (i + 1) # Average over past OFDM blocks
 
     noiseAccum = []
+    rng = default_rng(randomSeedStart) # Used for standardised audio modem
     for i in range(numberOfBlocks):
         # Retrace back the original seed
-        rng = default_rng(randomSeedStart + i)
-        bits = rng.binomial(n=1, p=0.5, size=((K-1)*mu))
+        # rng = default_rng(randomSeedStart + i)
+        if i == numberOfBlocks // 2:
+            rng = default_rng(randomSeedStart)
+        bits = rng.integers(low=0, high=2, size=(K-1)*mu)
         bitsSP = bits.reshape(len(bits)//mu, mu)
         symbol = np.array([mappingTable[tuple(b)] for b in bitsSP])
         expectedSymbols = np.concatenate(([0], symbol, [0], np.conj(symbol)[::-1]))
@@ -301,11 +307,10 @@ def map_to_decode(audio, channelH, N, K, CP, dataCarriers, pilotCarriers, pilotV
             pilotImportance = 0
             pilotHest = 0
         
-        # !!! - this is not being used at the moment, may attempt to get it working in the future
         if knownOFDMInData:
             # Every 10 data blocks is one known OFDM block
             if count == knownInDataFreq:
-                updateHest, updateOffset =  channel_estimate_known_ofdm(preData, seedStart+1, mappingTable, N, K, CP, mu, plot = False)
+                updateHest, updateOffset = channel_estimate_known_ofdm(preData, seedStart+1, mappingTable, N, K, CP, mu, plot = False)
                 updateOffsets.append(updateOffset)
                 appendToData = False
                 count = 0
