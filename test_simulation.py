@@ -109,7 +109,7 @@ plt.plot(dataTotal)
 plt.title("Signal to send"); plt.xlabel('Sample number'); plt.ylabel('Sound amplitude');
 plt.show()
 
-write("audio/James/Encoded Inputs/input.{}".format(actualfileformat), fs, dataTotal)
+write("audio/Brendan/testing/input_{}.wav".format(actualfileformat), fs, dataTotal)
 
 ### CHANNEL ###
 
