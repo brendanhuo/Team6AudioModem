@@ -15,8 +15,8 @@ dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = useBandLimit
 # Import text file for testing
 
 # file = "./text/asyoulik.txt"
-file = "./text/lorem.txt"
-# file = "./image/autumn_small.tif"
+# file = "./text/lorem.txt"
+file = "./image/autumn_small.tif"
 # file = "audio/James/chirp length/lorem_2.0s.wav"
 actualfileformat = file[-3:]
 
@@ -110,7 +110,7 @@ plt.plot(dataTotal)
 plt.title("Signal to send"); plt.xlabel('Sample number'); plt.ylabel('Sound amplitude');
 plt.show()
 
-#write("audio/Brendan/testing/input_qpsk_22000_{}.wav".format(actualfileformat), fs, dataTotal)
+write("audio/Brendan/testing/latinlong_qpsk_metadata_ldpc_{}.wav".format(actualfileformat), fs, dataTotal)
 
 ### CHANNEL ###
 
@@ -179,10 +179,9 @@ else:
     plt.show()
 
 if usemetadata: 
-    dataToCsv = np.array(outputData, dtype=int).ravel()[len_metadata_bits:len_metadata_bits + lenData]
+    dataToCsv = np.array(outputData, dtype=int).ravel()[len_metadata_bits-32:len_metadata_bits-32 + lenData]
 else:
     dataToCsv = np.array(outputData, dtype=int).ravel()[:lenData0]
-file_format = 1
 
 if file_format == 'txt':
     demodulatedOutput = ''.join(str(e) for e in dataToCsv)

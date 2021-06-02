@@ -8,17 +8,15 @@ from chirp import *
 from channel import *
 from audio_utils import *
 
-usdldpc = False 
-
-image_path = "./image/autumn_small.tif"
-ba, image_shape = image2bits(image_path, plot = True)
-imageData = ba
+# image_path = "./image/autumn_small.tif"
+# ba, image_shape = image2bits(image_path, plot = True)
+# imageData = ba
 
 useldpc = True
 dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = useBandLimit)
 
 # MAKE SURE THAT THE INPUT HAS GLOBAL VALUES THAT MATCH
-receivedSound = audioDataFromFile("audio/brendan/testing/autumn_standard_16qam.wav")
+receivedSound = audioDataFromFile("audio/brendan/Team1/text_with_metadata+ldpc.wav")
 plt.plot(np.arange(len(receivedSound))/fs, receivedSound)
 plt.title('Received Sound'); plt.xlabel('Time/s'); plt.ylabel('Sound amplitude')
 plt.show()
@@ -74,13 +72,13 @@ else:
         plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Demodulated Constellation');
     plt.show()
 
-dataToCsv = np.array(outputData, dtype=int).ravel()[len_metadata_bits:len_metadata_bits + lenData]
+dataToCsv = np.array(outputData, dtype=int).ravel()[len_metadata_bits-32:len_metadata_bits-32 + lenData]
 
-if file_format == 1:
+if file_format == 'txt':
     demodulatedOutput = ''.join(str(e) for e in dataToCsv)
     print(text_from_bits(demodulatedOutput))
 
-elif file_format == 2:
+elif file_format == 'tif':
     byte_array = []
     for i in range(len(dataToCsv) // 8):
         demodulatedOutput = ''.join(str(e) for e in dataToCsv[8 * i:8 * (i + 1)])
@@ -92,11 +90,11 @@ elif file_format == 2:
     plt.title('Image received')
     plt.show()
 
-elif file_format == 3:
+elif file_format == 'wav':
     save(dataToCsv, "audio/James/Decoded Outputs/output.wav{}".format(file_format))
     print(len(dataToCsv)/fs)
     play(dataToCsv)
 
-ber = calculateBER(imageData, dataToCsv)
-print("Bit Error Rate:" + str(ber))
+# ber = calculateBER(imageData, dataToCsv)
+# print("Bit Error Rate:" + str(ber))
 
