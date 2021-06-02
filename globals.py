@@ -80,6 +80,8 @@ f2 = 10000.0
 # Pilot Estimation
 pilotImportance = 0.5
 pilotValues = True
+knownOFDMImportance = 0
+knownOFDMInData = True
 
 # Chirp Estimation
 samples = 10000

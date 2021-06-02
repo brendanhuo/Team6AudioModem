@@ -27,8 +27,8 @@ ldpcCoder = ldpc.code()
 ldpcBlockLength = ldpcCoder.K
 
 # Pad ba for ldpc
-ba = np.append(ba, np.zeros(((len(ba)) // ldpcBlockLength + 1) * ldpcBlockLength - len(ba)))
-ba = np.reshape(ba, (-1, ldpcBlockLength))
+lenAppendldpc = ((len(ba)) // ldpcBlockLength + 1) * ldpcBlockLength - len(ba)
+ba = np.append(ba, np.random.binomial(n=1, p=0.5, size=(lenAppendldpc, )))
 ldpcConvert = []
 for i in range(len(ba)):
     encoded = ldpcCoder.encode(ba[i])
@@ -51,8 +51,8 @@ plt.show()
 positionChirpEnd = chirp_synchroniser(receivedSound)
 
 # OFDM block channel estimation
-ofdmBlockStart = positionChirpEnd + (N + CP) * noiseBlocks
-ofdmBlockEnd = positionChirpEnd  + (N + CP) * blockNum + (N + CP) * noiseBlocks
+ofdmBlockStart = positionChirpEnd + (N + CP) 
+ofdmBlockEnd = positionChirpEnd  + (N + CP) * blockNum 
 dataStart = ofdmBlockEnd
 dataEnd = ofdmBlockEnd + numOFDMblocks * (N + CP) # number of data OFDM blocks we are sending should be determined by metadata
 
@@ -69,8 +69,8 @@ plt.title('Impulse response'); plt.xlabel('Time / s'); plt.ylabel('Amplitude of 
 plt.show()
 
 # Correct for synchronization error
-ofdmBlockStart = positionChirpEnd + floor(offset) + (N + CP) * noiseBlocks
-ofdmBlockEnd = positionChirpEnd  + (N + CP) * blockNum + floor(offset) + (N + CP) * noiseBlocks
+ofdmBlockStart = positionChirpEnd + floor(offset) 
+ofdmBlockEnd = positionChirpEnd  + (N + CP) * blockNum + floor(offset)
 dataStart = ofdmBlockEnd
 dataEnd = ofdmBlockEnd + numOFDMblocks * (N + CP) # number of data OFDM blocks we are sending should be determined by metadata
 
@@ -108,21 +108,7 @@ equalizedSymbols, hestAggregate = map_to_decode(receivedSound[dataStart:dataEnd]
 # Decode using LDPC
 # Noise variances that are estimated - real part and imaginary part - may want to refine later
 noiseVariances = [1, 1]
-llrsReceived = return_llrs(equalizedSymbols, hestAggregate, noiseVariances)[:-numZerosAppend]
-llrsReceived = np.reshape(llrsReceived[:len(llrsReceived)//648*648], (-1, 2 * ldpcCoder.K))
-fullOutputData = []
-for block in llrsReceived:
-    outputData, _ = ldpcCoder.decode(block, 'sumprod2')
-    for i in range(len(outputData[0:ldpcBlockLength])):
-        if outputData[i] > 0:
-            outputData[i] = int(0)
-        else:
-            outputData[i] = int(1)
-    fullOutputData.append(outputData[0:ldpcBlockLength])    
-    # np.place(outputData, outputData>=0, int(0))
-    # np.place(outputData, outputData<0, int(1))
-    # fullOutputData.append(outputData[0:ldpcBlockLength])
-outputData = np.array(fullOutputData)
+outputData = ldpcDecode(equalizedSymbols, hestAggregate, noiseVariances, numZerosAppend)
 
 # Bit sequence to text
 dataToCsv = np.array(outputData, dtype=int).ravel()[:lenData]

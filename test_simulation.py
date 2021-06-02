@@ -14,8 +14,8 @@ dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = useBandLimit
 # Import text file for testing
 
 # file = "./text/asyoulik.txt"
-file = "./text/lorem.txt"
-# file = "./image/autumn_small.tif"
+# file = "./text/lorem.txt"
+file = "./image/autumn_small.tif"
 # file = "audio/James/chirp length/lorem_2.0s.wav"
 actualfileformat = file[-3:]
 
@@ -53,8 +53,8 @@ ba = append_Metadata(ba, file, lenData0)
 # LDPC encoding
 if useldpc:
     # Pad ba for ldpc
-    ba = np.append(ba, np.zeros(((len(ba)) // ldpcBlockLength + 1) * ldpcBlockLength - len(ba)))
-
+    lenAppendldpc = ((len(ba)) // ldpcBlockLength + 1) * ldpcBlockLength - len(ba)
+    ba = np.append(ba, np.random.binomial(n=1, p=0.5, size=(lenAppendldpc, )))
     ba = np.reshape(ba, (-1, ldpcBlockLength))
 
     ldpcConvert = []
@@ -73,7 +73,7 @@ numOFDMblocks = len(bitsSP)
 print(numOFDMblocks)
 
 # Chirp 
-exponentialChirp = exponential_chirp()/4
+exponentialChirp = exponential_chirp()/5
 # exponentialChirp = exponential_chirp_chain()
 # OFDM data symbols
 sound = map_to_transmit(K, CP, pilotValue, pilotCarriers, dataCarriers, bitsSP)
@@ -149,10 +149,13 @@ print(offset)
 
 ### EXTRACT METADATA ###
 
-lenData, numOFDMblocks, file_format = extract_Metadata(dataCarriers, ofdmReceived, dataStart, hest, pilotCarriers, numZerosAppend, ldpcCoder, ldpcBlockLength)
+lenData, numOFDMblocks, file_format = extract_Metadata(dataCarriers, ofdmReceived, dataStart, hest, pilotCarriers)
 
 # print("estimated length: ", lenData + len_metadata_bits)
 dataEnd = dataStart + (numOFDMblocks + numOFDMblocks//knownInDataFreq) * (N + CP) 
+lenAppendldpc = ((lenData) // ldpcBlockLength + 1) * ldpcBlockLength - lenData
+lenTotalba = lenData + lenAppendldpc
+numZerosAppend = len(dataCarriers)*mu - (lenTotalba - lenTotalba//mu//len(dataCarriers) * len(dataCarriers) * mu)
 
 equalizedSymbols, hestAggregate = map_to_decode(ofdmReceived[dataStart:dataEnd], hest, N, K, CP, dataCarriers, pilotCarriers, pilotValue, offset=0, samplingMismatch=0, pilotImportance=0,
                                                     pilotValues=True, knownOFDMImportance=0, knownOFDMInData=True)

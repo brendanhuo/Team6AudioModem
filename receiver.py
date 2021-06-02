@@ -165,7 +165,7 @@ def calculate_sampling_mismatch(audio, channelH, N, CP, pilotCarriers, pilotValu
 
     pilotOffsets = [] # Sample offset for each data block calculated by pilot tones
     pilotHest = 0 # Pilot channel estimate using pilot tones for a data block
-
+    count = 0
     for i in range(len(audio)//(N+CP)):
         # Shift and rotate by offset
         if abs(remainingDifference)>=1:
@@ -180,9 +180,17 @@ def calculate_sampling_mismatch(audio, channelH, N, CP, pilotCarriers, pilotValu
             data[l] *= cmath.exp(toRotate * l * 2 * np.pi/N * 1j)
         
         data_equalized = data/Hest
-        
-        pilotHest, pilotOffset = channel_estimate_pilot(data_equalized, pilotCarriers, pilotValue, N)
-        pilotOffsets.append(pilotOffset)
+        if knownOFDMInData:
+            if count == knownInDataFreq:
+                pilotOffsets.append(None)
+                count = 0
+            else:
+                pilotHest, pilotOffset = channel_estimate_pilot(data_equalized, pilotCarriers, pilotValue, N)
+                pilotOffsets.append(pilotOffset)
+                count += 1  
+        else:
+            pilotHest, pilotOffset = channel_estimate_pilot(data_equalized, pilotCarriers, pilotValue, N)
+            pilotOffsets.append(pilotOffset)    
         
         # Hest = (1-pilotImportance) * Hest + pilotImportance*pilotHest
     
@@ -492,7 +500,7 @@ def demapping(qpsk, demappingTable):
     return np.vstack([demappingTable[C] for C in hardDecision]), hardDecision
 
 
-def extract_Metadata(dataCarriers, ofdmReceived, dataStart, hest, pilotCarriers, numZerosAppend, ldpcCoder, ldpcBlockLength):
+def extract_Metadata(dataCarriers, ofdmReceived, dataStart, hest, pilotCarriers):
     """Extracts Metadata and returns estimated values"""
 
     # Determine end point of data from Metadata at beginning of received signal
@@ -503,7 +511,7 @@ def extract_Metadata(dataCarriers, ofdmReceived, dataStart, hest, pilotCarriers,
                                                     pilotValues=True, knownOFDMImportance=0, knownOFDMInData=False)
     # Noise variances shown for now
     noiseVariances = [1, 1]
-    llrsReceived = return_llrs_qpsk(equalizedSymbols, hestAggregate, noiseVariances)[:-numZerosAppend]
+    llrsReceived = return_llrs_qpsk(equalizedSymbols, hestAggregate, noiseVariances)
     llrsReceived = np.reshape(llrsReceived[:len(llrsReceived) // 648 * 648], (-1, 2 * ldpcCoder.K))
     fullOutputData = []
     for block in llrsReceived:
