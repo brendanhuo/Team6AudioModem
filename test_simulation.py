@@ -21,7 +21,7 @@ file = "./text/lorem.txt"
 actualfileformat = file[-3:]
 
 # Reads file depending on detected format
-if file_formats[actualfileformat] == 1:
+if actualfileformat == 'txt':
     with open(file) as f:
         contents = f.read()
         # contents = contents[:len(contents)//8]
@@ -29,10 +29,10 @@ if file_formats[actualfileformat] == 1:
     ba.frombytes(contents.encode('utf-8'))
     ba = np.array(ba.tolist())
 
-elif file_formats[actualfileformat] == 2:
+elif actualfileformat == 'tif':
     ba, _ = image2bits(file, plot=False)
 
-elif file_formats[actualfileformat] == 3:
+elif actualfileformat == 'wav':
     binary = []
     with open(file, "rb") as f:
         ba = f.read()
@@ -40,7 +40,7 @@ elif file_formats[actualfileformat] == 3:
         binary.append([int(i) for i in str(bin(byte)[2:].zfill(8))])
     ba = np.array(binary)
     ba = ba.reshape(-1)
-    print(len(ba))
+    # print(len(ba))
 else:
     raise ValueError("Not a recognisable file format: formats include: ", file_formats)
 
@@ -183,11 +183,12 @@ if usemetadata:
 else:
     dataToCsv = np.array(outputData, dtype=int).ravel()[:lenData0]
 file_format = 1
-if file_format == 1:
+
+if file_format == 'txt':
     demodulatedOutput = ''.join(str(e) for e in dataToCsv)
     print(text_from_bits(demodulatedOutput))
 
-elif file_format == 2:
+elif file_format == 'tif':
     byte_array = []
     for i in range(len(dataToCsv) // 8):
         demodulatedOutput = ''.join(str(e) for e in dataToCsv[8 * i:8 * (i + 1)])
@@ -199,9 +200,9 @@ elif file_format == 2:
     plt.title('Image received')
     plt.show()
 
-elif file_format == 3:
+elif file_format == 'wav':
     save(dataToCsv, "audio/James/Decoded Outputs/output.wav{}".format(file_format))
-    print(len(dataToCsv)/fs)
+    print(len(dataToCsv) / fs)
     play(dataToCsv)
 
 # print("lengths: ", lenData, len(dataToCsv), len(actualData))

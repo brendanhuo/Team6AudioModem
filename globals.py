@@ -115,12 +115,12 @@ knownInDataFreq = 10 #Every 10 data blocks is one known OFDM
 metadata = True
 multiplier = 1
 
-len_file_len = 32  # bits
-num_file_len = 1  # number of repeats
+len_file_len = 8 * 4  # bits
+num_file_len = 5  # number of repeats
 
-len_file_format = 16  # bits
-num_file_format = 1  # number of repeats
-file_formats = {"txt" : 1, "tif" : 2, "wav" : 3}
+len_file_format = 8  # bits (now redundant given below mapping)
+num_file_format = 5  # number of repeats
+file_formats = {"txt" : [0, 1, 0, 0, 1, 0, 0, 0], "tif" : [0, 0, 1, 1, 0, 0, 1, 0], "wav" : [1, 0, 1, 0, 0, 1, 0, 1]}
 
 if metadata:
     len_metadata_bits = len_file_len * num_file_len + len_file_format * num_file_format
