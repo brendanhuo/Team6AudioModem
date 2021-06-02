@@ -134,6 +134,49 @@ def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N
     offset, y_fit = get_clean_offset(hestAtSymbols, dropFront = 300, dropBack = upperFrequencyBin, plot = plot)
     return hestAtSymbols, offset
 
+def noise_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N, K, CP, mu, plot = False):
+    """Channel estimate using known OFDM block symbols"""
+
+    numberOfBlocks = len(knownOFDMBlock) // (N+CP)
+    hestAtSymbols = np.zeros(N, dtype = complex) # estimate of the channel gain at particular frequency bins
+
+    for i in range(numberOfBlocks):
+        # Retrace back the original seed
+        rng = default_rng(randomSeedStart + i)
+        bits = rng.binomial(n=1, p=0.5, size=((K-1)*mu))
+        bitsSP = bits.reshape(len(bits)//mu, mu)
+        symbol = np.array([mappingTable[tuple(b)] for b in bitsSP])
+        expectedSymbols = np.concatenate(([0], symbol, [0], np.conj(symbol)[::-1]))
+
+        receivedSymbols = knownOFDMBlock[i*(N+CP): (i+1)*(N+CP)]
+        receivedSymbols = removeCP(receivedSymbols, CP, N)
+        receivedSymbols = DFT(receivedSymbols, N)
+        for j in range(N):
+            # Avoids divide by 0 errors
+            if j == N//2 or j == 0:
+                hestAtSymbols[j] = 0
+            else:
+                div = (receivedSymbols[j]/expectedSymbols[j])
+                hestAtSymbols[j] = (hestAtSymbols[j] * i + div) / (i + 1) # Average over past OFDM blocks
+
+    noiseAccum = []
+    for i in range(numberOfBlocks):
+        # Retrace back the original seed
+        rng = default_rng(randomSeedStart + i)
+        bits = rng.binomial(n=1, p=0.5, size=((K-1)*mu))
+        bitsSP = bits.reshape(len(bits)//mu, mu)
+        symbol = np.array([mappingTable[tuple(b)] for b in bitsSP])
+        expectedSymbols = np.concatenate(([0], symbol, [0], np.conj(symbol)[::-1]))
+
+        receivedSymbols = knownOFDMBlock[i*(N+CP): (i+1)*(N+CP)]
+        receivedSymbols = removeCP(receivedSymbols, CP, N)
+        receivedSymbols = DFT(receivedSymbols, N)
+
+        noise = receivedSymbols - expectedSymbols * hestAtSymbols
+        noiseAccum.append(noise)
+    noiseAvg = np.mean(noiseAccum, axis=0)
+    return noiseAvg
+
 def channel_estimate_pilot(ofdmReceived, pilotCarriers, pilotValue, N):
     """Performs channel estimation using pilot values"""
 
@@ -162,24 +205,15 @@ def calculate_sampling_mismatch(audio, channelH, N, CP, pilotCarriers, pilotValu
     Hest = channelH
 
     # Remaining offset to rotate by after shifting samples
-    remainingDifference = 0
 
     pilotOffsets = [] # Sample offset for each data block calculated by pilot tones
     pilotHest = 0 # Pilot channel estimate using pilot tones for a data block
     count = 0
     for i in range(len(audio)//(N+CP)):
-        # Shift and rotate by offset
-        if abs(remainingDifference)>=1:
-            data = audio[i*(N+CP)+floor(remainingDifference): (N+CP)*(i+1)+floor(remainingDifference)]
-            toRotate = remainingDifference - floor(remainingDifference)
-        else:
-            data = audio[i*(N+CP): (N+CP)*(i+1)]
-            toRotate = remainingDifference
+        data = audio[i*(N+CP): (N+CP)*(i+1)]
         data = removeCP(data, CP, N)
         data = DFT(data, N)
-        for l in range(len(data)):
-            data[l] *= cmath.exp(toRotate * l * 2 * np.pi/N * 1j)
-        
+
         data_equalized = data/Hest
         if knownOFDMInData:
             if count == knownInDataFreq:
@@ -192,17 +226,6 @@ def calculate_sampling_mismatch(audio, channelH, N, CP, pilotCarriers, pilotValu
         else:
             pilotHest, pilotOffset = channel_estimate_pilot(data_equalized, pilotCarriers, pilotValue, N)
             pilotOffsets.append(pilotOffset)    
-        
-        # Hest = (1-pilotImportance) * Hest + pilotImportance*pilotHest
-    
-    # Perform linear regression to calculate gradient
-    # y = pilotOffsets
-    # x = np.arange(len(y))
-    
-    # model = LinearRegression().fit(x[:, np.newaxis], y)
-    # y_fit = model.predict(x[:, np.newaxis])
-    
-    # slope = model.coef_[0]
 
     # Smooths input
     yhat = savgol_filter(pilotOffsets, 31, 1) # window size 11, polynomial order 1
