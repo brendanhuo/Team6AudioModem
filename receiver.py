@@ -100,13 +100,13 @@ def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N
 
     numberOfBlocks = len(knownOFDMBlock) // (N+CP)
     hestAtSymbols = np.zeros(N, dtype = complex) # estimate of the channel gain at particular frequency bins
-    rng = default_rng(randomSeedStart) # Used for standardised audio modem
+    rng = np.random.default_rng(randomSeedStart) # Used for standardised audio modem
     for i in range(numberOfBlocks):
         # Retrace back the original seed
         # rng = default_rng(randomSeedStart + i)
         if i == numberOfBlocks // 2:
-            rng = default_rng(randomSeedStart)
-        bits = rng.binomial(n=1, p=0.5, size=((K-1)*mu))
+            rng = np.random.default_rng(randomSeedStart)
+        bits = bits = rng.integers(low=0, high=2, size=(K-1)*mu)
         bitsSP = bits.reshape(len(bits)//mu, mu)
         symbol = np.array([mappingTable[tuple(b)] for b in bitsSP])
         expectedSymbols = np.concatenate(([0], symbol, [0], np.conj(symbol)[::-1]))
