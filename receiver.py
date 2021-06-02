@@ -578,17 +578,19 @@ def extract_Metadata(dataCarriers, ofdmReceived, dataStart, hest, pilotCarriers)
             file_format[i] = 1
         else:
             file_format[i] = 0
-
+    print("file format: ", file_format)
     # Minimum distance decoder
 
     hamming_distances = []
-    for format in file_formats:
+    for key in file_formats:
         hamming_distance = 0
-        for i in range(len(format)):
-            if file_format[i] != format[i]:
+        for i in range(len(file_formats[key])):
+            # print(file_format[i], file_formats[key][i], i)
+            if file_format[i] != file_formats[key][i]:
                 hamming_distance += 1
         hamming_distances.append(hamming_distance)
     val, idx = min((val, idx) for (idx, val) in enumerate(hamming_distances))
+    print("hamming distances: ", hamming_distances)
     file_format = list(file_formats.keys())[idx]
 
     print("File format detected: ", file_format)
