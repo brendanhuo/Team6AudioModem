@@ -15,8 +15,8 @@ dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = useBandLimit
 # Import text file for testing
 
 # file = "./text/asyoulik.txt"
-# file = "./text/lorem.txt"
-file = "./image/autumn_small.tif"
+file = "./text/lorem.txt"
+# file = "./image/autumn_small.tif"
 # file = "audio/James/chirp length/lorem_2.0s.wav"
 actualfileformat = file[-3:]
 
@@ -192,7 +192,7 @@ if usemetadata:
     dataToCsv = np.array(outputData, dtype=int).ravel()[len_metadata_bits:len_metadata_bits + lenData]
 else:
     dataToCsv = np.array(outputData, dtype=int).ravel()[:lenData0]
-    file_format = 1
+    file_format = 'txt'
 
 if str(file_format) == 'txt':
     demodulatedOutput = ''.join(str(e) for e in dataToCsv)
@@ -222,7 +222,7 @@ elif file_format == 'wav':
     print(len(dataToCsv) / fs)
     play(dataToCsv)
 else:
-    raise ValueError("File format not recognised you idiot: content: {}, type: {}".format(file_format, type(file_format)))
+    raise ValueError("File format not recognised you idiot: you should be in Group 1")
 
 if not usemetadata:
 # print("lengths: ", lenData, len(dataToCsv), len(actualData))
