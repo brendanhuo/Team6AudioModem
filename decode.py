@@ -94,8 +94,10 @@ for i in range(1):
     print('New synchronization offset (for rotation): ' + str(offset))
 
     ### EXTRACT METADATA ###
-    # lenData, numOFDMblocks, file_format = extract_Metadata(dataCarriers, receivedSound, dataStart, hest, pilotCarriers)
-    numOFDMblocks = lenData//mu//len(dataCarriers) + 1
+    if metadata:
+        lenData, numOFDMblocks, file_format = extract_Metadata(dataCarriers, receivedSound, dataStart, hest, pilotCarriers)
+    else:
+        numOFDMblocks = lenData//mu//len(dataCarriers) + 1
 
     # print("estimated length: ", lenData + len_metadata_bits)
     dataEnd = dataStart + (numOFDMblocks + numOFDMblocks//knownInDataFreq + 1) * (N + CP) 
@@ -122,7 +124,8 @@ for i in range(1):
             plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Demodulated Constellation');
         plt.show()
     lenData = len(actualData)
-    file_format = 'tif'
+    if not metadata:
+        file_format = 'tif'
     dataToCsv = np.array(outputData, dtype=int).ravel()[len_metadata_bits:len_metadata_bits + lenData]
     # file_format = 'txt'
     if file_format == 'txt':
