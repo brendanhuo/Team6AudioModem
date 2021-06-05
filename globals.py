@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from numpy.core.numeric import True_
 import scipy.interpolate
 import simpleaudio as sa
 import pyaudio
@@ -15,6 +16,8 @@ from scipy.io.wavfile import write
 from scipy import signal
 from binary_utils import *
 from ldpc_jossy.py import ldpc
+from bitarray import bitarray
+from PIL import Image
 
 # OFDM
 N = 2048 # DFT size
@@ -65,7 +68,7 @@ if QAM:
     demappingTable = {v : k for k, v in mappingTable.items()}
 
 # LDPC
-ldpcCoder = ldpc.code()
+ldpcCoder = ldpc.code(z = 81)
 ldpcBlockLength = ldpcCoder.K
 
 # Chirp Chain

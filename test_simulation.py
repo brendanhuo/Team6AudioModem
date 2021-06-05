@@ -6,8 +6,8 @@ from chirp import *
 from channel import *
 from audio_utils import *
 
-useldpc = False
-usemetadata = True
+useldpc = True
+usemetadata = metadata
 dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = useBandLimit)
 
 ### TRANSMITTER ###
@@ -30,7 +30,17 @@ if actualfileformat == 'txt':
     ba = np.array(ba.tolist())
 
 elif actualfileformat == 'tif':
-    ba, _ = image2bits(file, plot=False)
+    # ba, _ = image2bits(file, plot=False)
+    # print(len(ba))
+    with open(file, 'rb') as f:
+        info_bytes = f.read()
+    bit_string = ''
+    for i in info_bytes:
+        binary_string = '{0:08b}'.format(i)
+        bit_string += binary_string
+    bit_int_list = [int(b) for b in str(bit_string)]
+    ba = bit_int_list
+    print(ba)
 
 elif actualfileformat == 'wav':
     binary = []
@@ -100,7 +110,7 @@ dataTotal = np.concatenate((np.zeros(fs), exponentialChirp.ravel(), preOFDMBlock
 
 for i in range(numOFDMblocks//knownInDataFreq):
    dataTotal = np.concatenate((dataTotal, sound[int(knownInDataFreq*i*(N+CP)):int(knownInDataFreq*(i+1)*(N+CP))], known_ofdm_block(1, seedStart+1, mu, K, CP, mappingTable)))
-dataTotal = np.concatenate((dataTotal, sound[numOFDMblocks//knownInDataFreq*knownInDataFreq*(N+CP):numOFDMblocks*(N+CP)], exponentialChirp.ravel(), np.zeros(fs)))
+dataTotal = np.concatenate((dataTotal, sound[numOFDMblocks//knownInDataFreq*knownInDataFreq*(N+CP):numOFDMblocks*(N+CP)], exponentialChirp.ravel()[::-1], np.zeros(fs)))
 
 print(len(dataTotal))
 
@@ -110,7 +120,7 @@ plt.plot(dataTotal)
 plt.title("Signal to send"); plt.xlabel('Sample number'); plt.ylabel('Sound amplitude');
 plt.show()
 
-write("audio/Brendan/testing/latinlong_qpsk_metadata_ldpc_{}.wav".format(actualfileformat), fs, dataTotal)
+# write("audio/Brendan/testing/latinlong_qpsk_standard_{}.wav".format(actualfileformat), fs, dataTotal)
 
 ### CHANNEL ###
 
@@ -179,7 +189,7 @@ else:
     plt.show()
 
 if usemetadata: 
-    dataToCsv = np.array(outputData, dtype=int).ravel()[len_metadata_bits-32:len_metadata_bits-32 + lenData]
+    dataToCsv = np.array(outputData, dtype=int).ravel()[len_metadata_bits:len_metadata_bits + lenData]
 else:
     dataToCsv = np.array(outputData, dtype=int).ravel()[:lenData0]
     file_format = 1
@@ -189,16 +199,23 @@ if str(file_format) == 'txt':
     print(text_from_bits(demodulatedOutput))
 
 elif str(file_format) == 'tif':
-    byte_array = []
-    for i in range(len(dataToCsv) // 8):
-        demodulatedOutput = ''.join(str(e) for e in dataToCsv[8 * i:8 * (i + 1)])
-        byte_array.append(int(demodulatedOutput, 2))
-    lenBytes = 1
-    for shape in image_shape:
-        lenBytes *= shape
-    plt.imshow(np.array(byte_array)[0:lenBytes].reshape(image_shape))
-    plt.title('Image received')
-    plt.show()
+    # byte_array = []
+    # for i in range(len(dataToCsv) // 8):
+    #     demodulatedOutput = ''.join(str(e) for e in dataToCsv[8 * i:8 * (i + 1)])
+    #     byte_array.append(int(demodulatedOutput, 2))
+    # lenBytes = 1
+    # for shape in image_shape:
+    #     lenBytes *= shape
+    # plt.imshow(np.array(byte_array)[0:lenBytes].reshape(image_shape))
+    # plt.title('Image received')
+    # plt.show()
+    string_ints = [str(it) for it in dataToCsv]
+    string_of_bits = "".join(string_ints)
+    image_bits = bitarray(string_of_bits)
+    bits_image_string = str(image_bits)
+    image_bytes = image_bits.tobytes()
+    with open('result/autumn_small_test.tif', 'wb') as f:
+        f.write(image_bytes)
 
 elif file_format == 'wav':
     save(dataToCsv, "audio/James/Decoded Outputs/output.wav{}".format(file_format))
@@ -211,6 +228,7 @@ if not usemetadata:
 # print("lengths: ", lenData, len(dataToCsv), len(actualData))
     demodulatedOutput = ''.join(str(e) for e in dataToCsv)
     print(text_from_bits(demodulatedOutput))
+
 ber = calculateBER(actualData, dataToCsv)
 print("BER: " + str(ber))
 

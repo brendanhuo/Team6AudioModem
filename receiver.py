@@ -66,11 +66,12 @@ def get_continue_seq(str_list):
 def get_clean_offset(hest, dropFront = 0, dropBack = -1, plot = False):
     """ Calculates offset values (in number of samples) from taking gradient of phase"""
     # Smooths input
-    yhat = savgol_filter(np.unwrap(np.angle(hest)), 31, 1)[dropFront:dropBack] # window size 11, polynomial order 1
+    yhat = savgol_filter(np.unwrap(np.angle(hest)), 31, 1) # window size 11, polynomial order 1
 
     # Process below to filter out the noisy phase signals to find the best continuous sequence to estimate the phase gradient
     second_deriv = np.gradient(np.gradient(yhat[0:N//2]))
     boundary = np.mean(abs(second_deriv))
+    second_deriv = second_deriv[dropFront:dropBack]
     goodFrequencies = []
     for i in range(len(second_deriv)):
         if abs(second_deriv[i]) <= boundary:
@@ -78,12 +79,8 @@ def get_clean_offset(hest, dropFront = 0, dropBack = -1, plot = False):
     best_sequence = get_continue_seq(goodFrequencies)
 
     # Calculates offset from process phase data
-    unwrapped_angle = yhat
+    unwrapped_angle = yhat[dropFront:dropBack]
     offset, y_fit = get_channel_offset(unwrapped_angle[best_sequence])
-
-    # If sequence length is short, likely that gradient is flat and so return offset = 0
-    if len(best_sequence) <= 30:
-        return 0, []
 
     if plot:
         plt.plot(unwrapped_angle[best_sequence], label = 'unwrapped angle at straight section')
@@ -92,7 +89,9 @@ def get_clean_offset(hest, dropFront = 0, dropBack = -1, plot = False):
         plt.plot(np.unwrap(np.angle(hest)), label = 'Hest')
         # plt.plot(np.angle(hest))
         plt.legend(); plt.title('Phase shift of H'); plt.xlabel('Frequency bins'); plt.ylabel('Phase shift / rads'); plt.show()
-
+    # If sequence length is short, likely that gradient is flat and so return offset = 0
+    if len(best_sequence) <= 20:
+        return 0, []
     return offset, y_fit
 
 def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N, K, CP, mu, plot = False):
@@ -131,7 +130,7 @@ def channel_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N
         plt.plot(np.arange(N//2 )/fs, hestImpulse[0:N//2])
         plt.title('Impulse response'); plt.xlabel('Time / s'); plt.ylabel('Amplitude of impulse response')
         plt.show()
-    offset, y_fit = get_clean_offset(hestAtSymbols, dropFront = 300, dropBack = upperFrequencyBin, plot = plot)
+    offset, y_fit = get_clean_offset(hestAtSymbols, dropFront = 250, dropBack = upperFrequencyBin, plot = plot)
     return hestAtSymbols, offset
 
 def noise_estimate_known_ofdm(knownOFDMBlock, randomSeedStart, mappingTable, N, K, CP, mu, plot = False):
@@ -254,14 +253,14 @@ def calculate_sampling_mismatch(audio, channelH, N, CP, pilotCarriers, pilotValu
     
     slope = model.coef_[0]
 
-    # If sequence length is short, likely that gradient is flat and so return offset = 0
-    if len(best_sequence) <= 30:
-        return 0
-
     if plot:
         plt.plot(pilotOffsets, label = 'pilot tone offsets')
         plt.plot(y_fit, label = 'linear regression')
         plt.legend(); plt.title('Pilot tone offset values plotted for every data block'); plt.xlabel('Data block number'); plt.ylabel('Offset amount (in samples)'); plt.show()
+
+    # If sequence length is short, likely that gradient is flat and so return offset = 0
+    if len(best_sequence) <= 30:
+        return 0
 
     return slope * 2 * np.pi / N #Convert to sample shift per data block
     
