@@ -13,48 +13,48 @@ from audio_utils import *
 # imageData = ba
 # file = "./text/asyoulik.txt"
 # file = "./text/lorem.txt"
-file = "./image/autumn_small.tif"
-# # file = "audio/James/chirp length/lorem_2.0s.wav"
-actualfileformat = file[-3:]
+# file = "./image/autumn_small.tif"
+# # # file = "audio/James/chirp length/lorem_2.0s.wav"
+# actualfileformat = file[-3:]
 
-# Reads file depending on detected format
-if actualfileformat == 'txt':
-    with open(file) as f:
-        contents = f.read()
-        contents = contents[:len(contents)//2]
-    ba = bitarray.bitarray()
-    ba.frombytes(contents.encode('utf-8'))
-    ba = np.array(ba.tolist())
+# # Reads file depending on detected format
+# if actualfileformat == 'txt':
+#     with open(file) as f:
+#         contents = f.read()
+#         contents = contents[:len(contents)//2]
+#     ba = bitarray.bitarray()
+#     ba.frombytes(contents.encode('utf-8'))
+#     ba = np.array(ba.tolist())
     
-elif actualfileformat == 'tif':
-    # ba, _ = image2bits(file, plot=False)
+# elif actualfileformat == 'tif':
+#     # ba, _ = image2bits(file, plot=False)
     
-    with open(file, 'rb') as f:
-        info_bytes = f.read()
-    bit_string = ''
-    for i in info_bytes:
-        binary_string = '{0:08b}'.format(i)
-        bit_string += binary_string
-    bit_int_list = [int(b) for b in str(bit_string)]
-    ba = bit_int_list
-    print(ba)
-actualData = ba
+#     with open(file, 'rb') as f:
+#         info_bytes = f.read()
+#     bit_string = ''
+#     for i in info_bytes:
+#         binary_string = '{0:08b}'.format(i)
+#         bit_string += binary_string
+#     bit_int_list = [int(b) for b in str(bit_string)]
+#     ba = bit_int_list
+#     print(ba)
+# actualData = ba
 
 useldpc = True
 # LDPC encoding
-if useldpc:
-    # Pad ba for ldpc
-    lenAppendldpc = ((len(ba)) // ldpcBlockLength + 1) * ldpcBlockLength - len(ba)
-    ba = np.append(ba, np.random.binomial(n=1, p=0.5, size=(lenAppendldpc, )))
-    ba = np.reshape(ba, (-1, ldpcBlockLength))
+# if useldpc:
+#     # Pad ba for ldpc
+#     lenAppendldpc = ((len(ba)) // ldpcBlockLength + 1) * ldpcBlockLength - len(ba)
+#     ba = np.append(ba, np.random.binomial(n=1, p=0.5, size=(lenAppendldpc, )))
+#     ba = np.reshape(ba, (-1, ldpcBlockLength))
 
-    ldpcConvert = []
-    for i in range(len(ba)):
-        encoded = ldpcCoder.encode(ba[i])
-        ldpcConvert.append(encoded)
+#     ldpcConvert = []
+#     for i in range(len(ba)):
+#         encoded = ldpcCoder.encode(ba[i])
+#         ldpcConvert.append(encoded)
 
-    ba = np.array(ldpcConvert).ravel()
-lenData = len(ba)
+#     ba = np.array(ldpcConvert).ravel()
+# lenData = len(ba)
 
 dataCarriers, pilotCarriers = assign_data_pilot(K, P, bandLimited = useBandLimit)
 
@@ -65,7 +65,7 @@ bers = []
 for i in range(1):
     # MAKE SURE THAT THE INPUT HAS GLOBAL VALUES THAT MATCH
     # receivedSound = audioDataFromFile("audio/brendan/16qam/outside/TASCAM_0{}.wav".format(i+300))
-    receivedSound = audioDataFromFile("audio/brendan/autumn/large/QAM/TASCAM_0311.wav")   
+    receivedSound = audioDataFromFile("audio/brendan/Team1/audio_71s.wav")   
     # plt.plot(np.arange(len(receivedSound))/fs, receivedSound)
     # plt.title('Received Sound'); plt.xlabel('Time/s'); plt.ylabel('Sound amplitude')
     # plt.show()
@@ -123,7 +123,7 @@ for i in range(1):
             plt.plot(hardDecision[0:400].real, hardDecision[0:400].imag, 'ro')
             plt.grid(True); plt.xlabel('Real part'); plt.ylabel('Imaginary part'); plt.title('Demodulated Constellation');
         plt.show()
-    lenData = len(actualData)
+    # lenData = len(actualData)
     if not metadata:
         file_format = 'tif'
     dataToCsv = np.array(outputData, dtype=int).ravel()[len_metadata_bits:len_metadata_bits + lenData]
@@ -142,13 +142,20 @@ for i in range(1):
             f.write(image_bytes)
 
     elif file_format == 'wav':
-        save(dataToCsv, "audio/James/Decoded Outputs/output.wav{}".format(file_format))
-        print(len(dataToCsv)/fs)
-        play(dataToCsv)
+        # save(dataToCsv, "result/output.wav")
+        # print(len(dataToCsv)/fs)
+        # play(dataToCsv)
+        string_ints = [str(it) for it in dataToCsv]
+        string_of_bits = "".join(string_ints)
+        image_bits = bitarray(string_of_bits)
+        bits_image_string = str(image_bits)
+        image_bytes = image_bits.tobytes()
+        with open('result/data_output.wav', 'wb') as f:
+            f.write(image_bytes)
 
-    ber = calculateBER(actualData, dataToCsv)
-    print("Bit Error Rate:" + str(ber))
-    bers.append(ber)
+    # ber = calculateBER(actualData, dataToCsv)
+    # print("Bit Error Rate:" + str(ber))
+    # bers.append(ber)
 
 # np.save("bers_16qam_outside.npy",np.asarray(bers))
 # np.save("syncerror_16qam_outside.npy",np.asarray(sync_error))
