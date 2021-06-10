@@ -8,6 +8,7 @@ Function files:
 * globals.py - global values and settings 
 * binary_utils.py - basic binary functions
 * audio_utils.py - functions for audio playback/record
+* chirp_channel_estimation.py - chirp channel estimation functionality
 
 Main files:
 * test_simulation.py - main file to create encoded file for transmission, also has simulated channel in for testing
